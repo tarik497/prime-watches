@@ -61,21 +61,29 @@ export default function AdminProductsPage() {
   }
 
   async function handleUpload(file: File) {
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetchApi('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setForm(p => ({ ...p, image_url: data.url }));
-      toast.success('Image uploadée!');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Erreur upload');
-    } finally {
-      setUploading(false);
-    }
+  setUploading(true);
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    
+    // Ne PAS mettre Content-Type manuellement — le navigateur le fait automatiquement
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+      // ⚠️ Pas de headers ici — important !
+    });
+    
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur upload');
+    setForm(p => ({ ...p, image_url: data.url }));
+    toast.success('Image uploadée!');
+  } catch (err: unknown) {
+    toast.error(err instanceof Error ? err.message : 'Erreur upload');
+  } finally {
+    setUploading(false);
   }
+}
 
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Nom requis'); return; }
