@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import type { DeliveryPrice } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
 import { WILAYAS } from '@/lib/wilayas';
-import { fetchApi } from '@/lib/fetchApi';
 
 export default function AdminSettingsPage() {
   const [packagingCost, setPackagingCost] = useState('200');
@@ -22,14 +21,14 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     // Load settings
-    fetchApi('/api/settings').then(r => r.json()).then(d => {
+    fetch('/api/settings').then(r => r.json()).then(d => {
       setPackagingCost(d.settings?.packaging_cost || '200');
       setWhatsapp(d.settings?.whatsapp_number || '');
       setStoreName(d.settings?.store_name || 'Prime Watches');
     });
 
     // Load delivery prices
-    fetchApi('/api/delivery').then(r => r.json()).then(d => {
+    fetch('/api/delivery').then(r => r.json()).then(d => {
       setDeliveryPrices(d.prices || []);
       setLoadingDelivery(false);
     });
@@ -38,7 +37,7 @@ export default function AdminSettingsPage() {
   async function saveGlobalSettings() {
     setSavingGlobal(true);
     try {
-      const res = await fetchApi('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packaging_cost: packagingCost, whatsapp_number: whatsapp, store_name: storeName }),
@@ -75,7 +74,7 @@ export default function AdminSettingsPage() {
       const office = edited?.office ?? getPriceForWilaya(code, 'office');
       const wilaya = WILAYAS.find(w => w.code === code);
 
-      const res = await fetchApi('/api/delivery', {
+      const res = await fetch('/api/delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wilaya_code: code, wilaya_name: wilaya?.name, home_price: home, office_price: office }),
@@ -125,7 +124,7 @@ export default function AdminSettingsPage() {
           </div>
 
           {/* WhatsApp */}
-          {/* <div>
+          <div>
             <label className="block text-sm font-body font-medium text-obsidian-300 mb-1.5">
               <Phone className="w-3.5 h-3.5 inline mr-1.5 text-green-400" />
               Numéro WhatsApp
@@ -134,7 +133,7 @@ export default function AdminSettingsPage() {
               placeholder="213XXXXXXXXX"
               className="w-full bg-obsidian-700 border border-obsidian-600 text-white placeholder-obsidian-500 rounded-xl px-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500" />
             <p className="text-xs text-obsidian-500 mt-1 font-body">Format: 213XXXXXXXXX (sans +)</p>
-          </div> */}
+          </div>
 
           {/* Packaging cost */}
           <div>

@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-// import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield } from 'lucide-react';
-import { ArrowLeft, Clock, ShoppingBag, Package, Truck, Shield } from 'lucide-react';
+import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
 
@@ -35,7 +34,7 @@ export default function ProductPage() {
   if (loading) return <PageSkeleton />;
   if (notFound || !product) return <NotFound />;
 
-  // const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`Je veux commander: ${product.name} - ${formatDA(product.selling_price)}`)}`;
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`Je veux commander: ${product.name} - ${formatDA(product.selling_price)}`)}`;
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
@@ -116,11 +115,11 @@ export default function ProductPage() {
                   <ShoppingBag className="w-5 h-5" />
                   Commander maintenant
                 </Link>
-                {/* <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 border-2 border-[#25D366] text-[#25D366] py-4 px-6 rounded-xl font-body font-medium hover:bg-[#25D366] hover:text-white transition-all">
                   <MessageCircle className="w-5 h-5" />
                   WhatsApp
-                </a> */}
+                </a>
               </div>
             ) : (
               <button disabled className="w-full bg-obsidian-200 text-obsidian-400 py-4 rounded-xl font-body font-medium cursor-not-allowed">
