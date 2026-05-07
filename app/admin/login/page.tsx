@@ -107,8 +107,6 @@ export default function AdminLoginPage() {
           <div className="mt-6 p-4 bg-obsidian-700/50 rounded-xl border border-obsidian-600">
             <p className="text-xs text-obsidian-400 font-body text-center">
               Comptes par défaut (changer en production):<br />
-              <span className="text-obsidian-300">admin1@primewatches.dz</span> — Admin@1234<br />
-              <span className="text-obsidian-300">admin2@primewatches.dz</span> — Admin@5678
             </p>
           </div>
         </div>
