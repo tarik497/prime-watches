@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Clock, ShoppingBag, Star, Zap, ChevronRight, Package } from 'lucide-react';
+import { ArrowLeft, Clock, ShoppingBag, Star, Zap, ChevronRight, Package, Minus, Plus } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
 
@@ -13,6 +13,7 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
@@ -38,6 +39,10 @@ export default function ProductPage() {
 
   const images = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
   const outOfStock = product.stock === 0;
+  const maxQty = Math.min(product.stock, 10);
+
+  function decrement() { setQuantity(q => Math.max(1, q - 1)); }
+  function increment() { setQuantity(q => Math.min(maxQty, q + 1)); }
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
@@ -62,16 +67,9 @@ export default function ProductPage() {
 
           {/* ── Images ── */}
           <div className="space-y-4">
-            {/* Main image */}
             <div className="relative aspect-square bg-gradient-to-br from-obsidian-50 to-obsidian-100 rounded-2xl overflow-hidden shadow-lg">
               {images[selectedImage] ? (
-                <Image
-                  src={images[selectedImage]}
-                  alt={product.name}
-                  fill
-                  className="object-cover"
-                  priority
-                />
+                <Image src={images[selectedImage]} alt={product.name} fill className="object-cover" priority />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Clock className="w-24 h-24 text-obsidian-200" />
@@ -79,9 +77,7 @@ export default function ProductPage() {
               )}
               {outOfStock && (
                 <div className="absolute inset-0 bg-obsidian-900/60 flex items-center justify-center">
-                  <span className="text-white font-body text-lg bg-obsidian-700 px-6 py-3 rounded-full">
-                    Rupture de stock
-                  </span>
+                  <span className="text-white font-body text-lg bg-obsidian-700 px-6 py-3 rounded-full">Rupture de stock</span>
                 </div>
               )}
               {product.stock <= 3 && product.stock > 0 && (
@@ -90,18 +86,13 @@ export default function ProductPage() {
                 </span>
               )}
             </div>
-
-            {/* Thumbnails */}
             {images.length > 1 && (
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {images.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedImage(i)}
+                  <button key={i} onClick={() => setSelectedImage(i)}
                     className={`relative w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${
                       selectedImage === i ? 'border-gold-500 shadow-md' : 'border-obsidian-200 opacity-60 hover:opacity-100'
-                    }`}
-                  >
+                    }`}>
                     <Image src={img} alt={`${product.name} ${i + 1}`} fill className="object-cover" />
                   </button>
                 ))}
@@ -111,19 +102,12 @@ export default function ProductPage() {
 
           {/* ── Product Info ── */}
           <div className="flex flex-col justify-start space-y-6">
-            {/* Category */}
             {product.category && (
-              <p className="text-gold-500 font-body text-sm uppercase tracking-[0.2em]">
-                {product.category}
-              </p>
+              <p className="text-gold-500 font-body text-sm uppercase tracking-[0.2em]">{product.category}</p>
             )}
 
-            {/* Name */}
-            <h1 className="font-display text-4xl text-obsidian-900 leading-tight">
-              {product.name}
-            </h1>
+            <h1 className="font-display text-4xl text-obsidian-900 leading-tight">{product.name}</h1>
 
-            {/* Rating placeholder */}
             <div className="flex items-center gap-2">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-4 h-4 text-gold-400 fill-gold-400" />
@@ -131,26 +115,28 @@ export default function ProductPage() {
               <span className="text-sm text-obsidian-400 font-body ml-1">Qualité garantie</span>
             </div>
 
-            {/* Price */}
+            {/* Price — updates live with quantity */}
             <div className="flex items-baseline gap-3">
               <span className="font-display text-4xl text-gold-600 font-semibold">
-                {formatDA(product.selling_price)}
+                {formatDA(product.selling_price * quantity)}
               </span>
+              {quantity > 1 && (
+                <span className="text-sm text-obsidian-400 font-body">
+                  ({formatDA(product.selling_price)} × {quantity})
+                </span>
+              )}
             </div>
 
-            {/* Description */}
             {product.description && (
-              <p className="text-obsidian-600 font-body leading-relaxed text-base">
-                {product.description}
-              </p>
+              <p className="text-obsidian-600 font-body leading-relaxed text-base">{product.description}</p>
             )}
 
             {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { icon: Zap, label: 'Livraison rapide', sub: 'Partout en Algérie' },
+                { icon: Zap,     label: 'Livraison rapide',   sub: 'Partout en Algérie' },
                 { icon: Package, label: 'Paiement livraison', sub: 'Aucun risque' },
-                { icon: Star, label: 'Qualité garantie', sub: 'Authentique' },
+                { icon: Star,    label: 'Qualité garantie',   sub: 'Authentique' },
               ].map(({ icon: Icon, label, sub }) => (
                 <div key={label} className="bg-obsidian-50 border border-obsidian-100 rounded-xl p-3 text-center">
                   <Icon className="w-5 h-5 text-gold-500 mx-auto mb-1" />
@@ -160,6 +146,39 @@ export default function ProductPage() {
               ))}
             </div>
 
+            {/* ── Quantity Selector ── */}
+            {!outOfStock && (
+              <div>
+                <label className="block text-sm font-body font-medium text-obsidian-700 mb-2">
+                  Quantité
+                </label>
+                <div className="flex items-center gap-0 w-fit border border-obsidian-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                  <button
+                    onClick={decrement}
+                    disabled={quantity <= 1}
+                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <div className="w-14 h-12 flex items-center justify-center font-display text-xl text-obsidian-900 border-x border-obsidian-200 select-none">
+                    {quantity}
+                  </div>
+                  <button
+                    onClick={increment}
+                    disabled={quantity >= maxQty}
+                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                {product.stock <= 10 && (
+                  <p className="text-xs text-obsidian-400 font-body mt-1.5">
+                    {product.stock} unité{product.stock > 1 ? 's' : ''} disponible{product.stock > 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* CTA Button */}
             {outOfStock ? (
               <button disabled className="w-full py-4 rounded-xl bg-obsidian-100 text-obsidian-400 font-body font-semibold text-lg cursor-not-allowed">
@@ -167,29 +186,24 @@ export default function ProductPage() {
               </button>
             ) : (
               <Link
-                href={`/checkout/${product.id}`}
+                href={`/checkout/${product.id}?qty=${quantity}`}
                 className="w-full flex items-center justify-center gap-3 btn-gold py-4 rounded-xl font-body font-semibold text-lg hover:shadow-xl transition-all"
               >
                 <ShoppingBag className="w-5 h-5" />
-                Commander maintenant
+                Commander {quantity > 1 ? `(${quantity} articles)` : 'maintenant'}
                 <ChevronRight className="w-5 h-5" />
               </Link>
             )}
 
-            {/* Stock info */}
-            {!outOfStock && (
+            {!outOfStock && product.stock > 10 && (
               <p className="text-center text-sm text-obsidian-400 font-body">
-                {product.stock > 10
-                  ? '✓ En stock — Expédition rapide'
-                  : `⚡ Plus que ${product.stock} disponible${product.stock > 1 ? 's' : ''} — Commandez vite!`
-                }
+                ✓ En stock — Expédition rapide
               </p>
             )}
           </div>
         </div>
       </main>
 
-      {/* Footer minimal */}
       <footer className="bg-obsidian-900 text-obsidian-400 text-center py-6 mt-16 font-body text-sm">
         © {new Date().getFullYear()} Prime Watches · Paiement à la livraison · Livraison dans les 58 wilayas
       </footer>
@@ -208,6 +222,7 @@ function LoadingSkeleton() {
           <div className="h-10 bg-obsidian-100 rounded w-3/4" />
           <div className="h-8 bg-obsidian-100 rounded w-1/3" />
           <div className="h-24 bg-obsidian-100 rounded" />
+          <div className="h-12 bg-obsidian-100 rounded w-40" />
           <div className="h-14 bg-obsidian-100 rounded" />
         </div>
       </div>
