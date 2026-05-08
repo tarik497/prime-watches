@@ -1,200 +1,306 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield, ChevronLeft,
-  ChevronRight } from 'lucide-react';
-import type { Product } from '@/lib/types';
+import { Save, Settings, Package, Truck, Phone, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
+import toast from 'react-hot-toast';
+import type { DeliveryPrice } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
+import { WILAYAS } from '@/lib/wilayas';
 
-export default function ProductPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+interface DeliveryPriceWithActive extends DeliveryPrice {
+  is_active: boolean;
+}
 
-  const [activeImg, setActiveImg] = useState(0);
+export default function AdminSettingsPage() {
+  const [packagingCost, setPackagingCost] = useState('200');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [storeName, setStoreName] = useState('Prime Watches');
+  const [savingGlobal, setSavingGlobal] = useState(false);
 
-  const allImages = product?.images?.length
-    ? product.images
-    : (product?.image_url ? [product.image_url] : []);
+  const [deliveryPrices, setDeliveryPrices] = useState<DeliveryPriceWithActive[]>([]);
+  const [loadingDelivery, setLoadingDelivery] = useState(true);
+  const [savingDelivery, setSavingDelivery] = useState<string | null>(null);
+  const [editedPrices, setEditedPrices] = useState<Record<number, { home: number; office: number; is_active: boolean }>>({});
+  const [searchWilaya, setSearchWilaya] = useState('');
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/products/${id}`);
-        if (!res.ok) { setNotFound(true); return; }
-        const data = await res.json();
-        setProduct(data.product);
-      } catch {
-        setNotFound(true);
-      } finally {
-        setLoading(false);
-      }
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        setPackagingCost(d.settings?.packaging_cost || '200');
+        setWhatsapp(d.settings?.whatsapp_number || '');
+        setStoreName(d.settings?.store_name || 'Prime Watches');
+      });
+
+    fetch('/api/delivery', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => {
+        setDeliveryPrices(d.prices || []);
+        setLoadingDelivery(false);
+      });
+  }, []);
+
+  async function saveGlobalSettings() {
+    setSavingGlobal(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packaging_cost: packagingCost,
+          whatsapp_number: whatsapp,
+          store_name: storeName,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Paramètres sauvegardés!');
+    } catch {
+      toast.error('Erreur sauvegarde');
+    } finally {
+      setSavingGlobal(false);
     }
-    load();
-  }, [id]);
+  }
 
-  if (loading) return <PageSkeleton />;
-  if (notFound || !product) return <NotFound />;
+  function getPriceForWilaya(code: number, field: 'home' | 'office' | 'is_active') {
+    const dp = deliveryPrices.find(p => p.wilaya_code === code);
+    if (field === 'is_active') return dp?.is_active ?? true;
+    return field === 'home' ? (dp?.home_price || 400) : (dp?.office_price || 300);
+  }
 
-  const message = `Je veux commander: ${product.name} - ${formatDA(product.selling_price)}`;
+  function updateLocalPrice(code: number, field: 'home' | 'office' | 'is_active', value: string | boolean) {
+    const current = editedPrices[code] ?? {
+      home: getPriceForWilaya(code, 'home') as number,
+      office: getPriceForWilaya(code, 'office') as number,
+      is_active: getPriceForWilaya(code, 'is_active') as boolean,
+    };
+    setEditedPrices(prev => ({
+      ...prev,
+      [code]: {
+        ...current,
+        [field]: field === 'is_active' ? value : (parseFloat(value as string) || 0),
+      },
+    }));
+  }
 
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  async function saveWilayaPrice(code: number) {
+    setSavingDelivery(code.toString());
+    try {
+      const edited = editedPrices[code];
+      const home      = edited?.home      ?? getPriceForWilaya(code, 'home') as number;
+      const office    = edited?.office    ?? getPriceForWilaya(code, 'office') as number;
+      const is_active = edited?.is_active ?? getPriceForWilaya(code, 'is_active') as boolean;
+      const wilaya    = WILAYAS.find(w => w.code === code);
+
+      const res = await fetch('/api/delivery', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wilaya_code: code,
+          wilaya_name: wilaya?.name,
+          home_price: home,
+          office_price: office,
+          is_active,
+        }),
+      });
+      if (!res.ok) throw new Error();
+
+      setDeliveryPrices(prev => prev.map(p =>
+        p.wilaya_code === code
+          ? { ...p, home_price: home, office_price: office, is_active }
+          : p
+      ));
+      setEditedPrices(prev => { const n = { ...prev }; delete n[code]; return n; });
+      toast.success(`Wilaya ${code} mise à jour!`);
+    } catch {
+      toast.error('Erreur mise à jour');
+    } finally {
+      setSavingDelivery(null);
+    }
+  }
+
+  const filteredWilayas = WILAYAS.filter(w =>
+    w.name.toLowerCase().includes(searchWilaya.toLowerCase()) ||
+    w.code.toString().includes(searchWilaya)
+  );
+
+  const activeCount   = deliveryPrices.filter(p => p.is_active !== false).length;
+  const inactiveCount = deliveryPrices.filter(p => p.is_active === false).length;
 
   return (
-    <div className="min-h-screen bg-[#fafaf8]">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-obsidian-900 text-white shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <button onClick={() => router.back()} className="flex items-center gap-2 text-obsidian-300 hover:text-white transition-colors">
-              <ArrowLeft className="w-5 h-5" /> Retour
-            </button>
-            <Link href="/shop" className="font-display text-xl text-gold-400 tracking-wider">PRIME WATCHES</Link>
-            <div className="w-20" />
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-display text-3xl text-white">Paramètres</h1>
+        <p className="text-obsidian-400 font-body text-sm mt-0.5">Configuration globale de la boutique</p>
+      </div>
+
+      {/* Global Settings */}
+      <div className="bg-obsidian-800 rounded-2xl border border-obsidian-700 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-9 h-9 bg-gold-500/10 rounded-xl flex items-center justify-center">
+            <Settings className="w-5 h-5 text-gold-400" />
+          </div>
+          <h2 className="font-display text-xl text-white">Paramètres généraux</h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label className="block text-sm font-body font-medium text-obsidian-300 mb-1.5">Nom de la boutique</label>
+            <input value={storeName} onChange={e => setStoreName(e.target.value)}
+              className="w-full bg-obsidian-700 border border-obsidian-600 text-white rounded-xl px-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-body font-medium text-obsidian-300 mb-1.5">
+              <Phone className="w-3.5 h-3.5 inline mr-1.5 text-green-400" />
+              Numéro WhatsApp
+            </label>
+            <input value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
+              placeholder="213XXXXXXXXX"
+              className="w-full bg-obsidian-700 border border-obsidian-600 text-white placeholder-obsidian-500 rounded-xl px-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-body font-medium text-obsidian-300 mb-1.5">
+              <Package className="w-3.5 h-3.5 inline mr-1.5 text-purple-400" />
+              Coût emballage par commande (DA)
+            </label>
+            <input type="number" min="0" value={packagingCost}
+              onChange={e => setPackagingCost(e.target.value)}
+              className="w-full bg-obsidian-700 border border-obsidian-600 text-white rounded-xl px-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500" />
           </div>
         </div>
-      </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Images */}
-        <div className="relative">
-          <div className="relative h-96 lg:h-[520px] bg-gradient-to-br from-obsidian-50 to-obsidian-100 rounded-3xl overflow-hidden shadow-2xl">
-            {allImages[activeImg] ? (
-              <Image src={allImages[activeImg]} alt={product.name} fill className="object-cover" />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Clock className="w-32 h-32 text-obsidian-200" />
-              </div>
-            )}
-            {/* Navigation arrows */}
-            {allImages.length > 1 && (
-              <>
-                <button onClick={() => setActiveImg(i => (i - 1 + allImages.length) % allImages.length)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-all">
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button onClick={() => setActiveImg(i => (i + 1) % allImages.length)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-all">
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">
-                  {activeImg + 1} / {allImages.length}
-                </div>
-              </>
-            )}
-          </div>
+        <button onClick={saveGlobalSettings} disabled={savingGlobal}
+          className="flex items-center gap-2 mt-6 btn-gold px-6 py-2.5 rounded-xl font-body font-medium text-sm disabled:opacity-60">
+          <Save className="w-4 h-4" />
+          {savingGlobal ? 'Sauvegarde...' : 'Sauvegarder'}
+        </button>
+      </div>
 
-          {/* Thumbnails */}
-          {allImages.length > 1 && (
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {allImages.map((img, i) => (
-                <button key={i} onClick={() => setActiveImg(i)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${activeImg === i ? 'border-gold-500' : 'border-obsidian-200'}`}>
-                  <Image src={img} alt={`vue ${i+1}`} width={64} height={64} className="object-cover w-full h-full" />
-                </button>
-              ))}
+      {/* Delivery Prices */}
+      <div className="bg-obsidian-800 rounded-2xl border border-obsidian-700 overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-6 border-b border-obsidian-700">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-500/10 rounded-xl flex items-center justify-center">
+              <Truck className="w-5 h-5 text-blue-400" />
             </div>
-          )}
-        </div>
-            {/* Stock ribbon */}
-            {product.stock > 0 && product.stock <= 5 && (
-              <div className="absolute top-4 right-4 bg-red-500 text-white text-sm font-body font-medium px-3 py-1.5 rounded-full shadow-lg">
-                Seulement {product.stock} en stock!
-              </div>
-            )}
-          </div>
-
-          {/* ── Details ── */}
-          <div className="flex flex-col justify-center space-y-6">
             <div>
-              <p className="text-gold-500 text-sm font-body uppercase tracking-[0.2em] mb-2">Montre de Luxe</p>
-              <h1 className="font-display text-4xl lg:text-5xl text-obsidian-900 leading-tight mb-4">{product.name}</h1>
-              {product.description && (
-                <p className="font-body text-obsidian-500 text-base leading-relaxed">{product.description}</p>
-              )}
-            </div>
-
-            {/* Price */}
-            <div className="border-t border-b border-obsidian-100 py-5">
-              <div className="flex items-baseline gap-3">
-                <span className="font-display text-4xl text-gold-600 font-semibold">{formatDA(product.selling_price)}</span>
-                <span className="text-obsidian-400 text-sm font-body">Prix de vente</span>
-              </div>
-              <p className="text-sm text-obsidian-400 font-body mt-1 flex items-center gap-1.5">
-                <Truck className="w-4 h-4" /> Frais de livraison calculés selon votre wilaya
+              <h2 className="font-display text-xl text-white">Prix de livraison par wilaya</h2>
+              <p className="text-obsidian-400 text-xs font-body">
+                <span className="text-emerald-400">{activeCount} actives</span>
+                {' · '}
+                <span className="text-red-400">{inactiveCount} désactivées</span>
               </p>
             </div>
-
-            {/* Features */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { icon: Package, label: 'Emballage soigné' },
-                { icon: Truck, label: 'Livraison rapide' },
-                { icon: Shield, label: 'Paiement livraison' },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="bg-obsidian-50 rounded-xl p-3 text-center">
-                  <Icon className="w-5 h-5 text-gold-500 mx-auto mb-1" />
-                  <p className="text-xs text-obsidian-600 font-body">{label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA Buttons */}
-            {product.stock > 0 ? (
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link href={`/checkout/${product.id}`}
-                  className="flex-1 bg-obsidian-900 text-white text-center py-4 px-6 rounded-xl font-body font-medium hover:bg-obsidian-700 transition-colors flex items-center justify-center gap-2 shadow-lg">
-                  <ShoppingBag className="w-5 h-5" />
-                  Commander maintenant
-                </Link>
-                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 border-2 border-[#25D366] text-[#25D366] py-4 px-6 rounded-xl font-body font-medium hover:bg-[#25D366] hover:text-white transition-all">
-                  <MessageCircle className="w-5 h-5" />
-                  WhatsApp
-                </a>
-              </div>
-            ) : (
-              <button disabled className="w-full bg-obsidian-200 text-obsidian-400 py-4 rounded-xl font-body font-medium cursor-not-allowed">
-                Rupture de stock
-              </button>
-            )}
           </div>
+          <input
+            value={searchWilaya}
+            onChange={e => setSearchWilaya(e.target.value)}
+            placeholder="Rechercher wilaya..."
+            className="bg-obsidian-700 border border-obsidian-600 text-white placeholder-obsidian-500 rounded-xl px-4 py-2 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500 w-full sm:w-64"
+          />
         </div>
-      </main>
-    </div>
-  );
-}
 
-function PageSkeleton() {
-  return (
-    <div className="min-h-screen bg-[#fafaf8] animate-pulse">
-      <div className="h-16 bg-obsidian-900" />
-      <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-1 lg:grid-cols-2 gap-12">
-        <div className="h-96 bg-obsidian-100 rounded-3xl" />
-        <div className="space-y-4">
-          <div className="h-4 bg-obsidian-100 rounded w-1/3" />
-          <div className="h-10 bg-obsidian-100 rounded w-3/4" />
-          <div className="h-20 bg-obsidian-100 rounded" />
-          <div className="h-12 bg-obsidian-100 rounded" />
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-obsidian-700">
+                {['#', 'Wilaya', 'Domicile (DA)', 'Bureau (DA)', 'Statut', 'Action'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-body font-medium text-obsidian-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-obsidian-700/50">
+              {loadingDelivery ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 6 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3"><div className="h-4 bg-obsidian-700 rounded w-20" /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                filteredWilayas.map(wilaya => {
+                  const dp        = deliveryPrices.find(p => p.wilaya_code === wilaya.code);
+                  const edited    = editedPrices[wilaya.code];
+                  const homeVal   = edited?.home      ?? dp?.home_price   ?? 400;
+                  const officeVal = edited?.office    ?? dp?.office_price ?? 300;
+                  const isActive  = edited?.is_active ?? dp?.is_active    ?? true;
+                  const isDirty   = edited !== undefined;
+
+                  return (
+                    <tr key={wilaya.code}
+                      className={`transition-colors ${
+                        !isActive
+                          ? 'bg-red-500/5 hover:bg-red-500/10'
+                          : 'hover:bg-obsidian-700/30'
+                      } ${isDirty ? 'ring-1 ring-inset ring-gold-500/20' : ''}`}>
+
+                      <td className="px-4 py-3 text-sm text-obsidian-500 font-body">{wilaya.code}</td>
+
+                      <td className="px-4 py-3">
+                        <span className={`text-sm font-body font-medium ${!isActive ? 'text-obsidian-500 line-through' : 'text-white'}`}>
+                          {wilaya.name}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <input
+                          type="number" min="0"
+                          value={homeVal}
+                          disabled={!isActive}
+                          onChange={e => updateLocalPrice(wilaya.code, 'home', e.target.value)}
+                          className="w-28 bg-obsidian-700 border border-obsidian-600 text-white rounded-lg px-3 py-1.5 font-body text-sm focus:outline-none focus:ring-1 focus:ring-gold-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <input
+                          type="number" min="0"
+                          value={officeVal}
+                          disabled={!isActive}
+                          onChange={e => updateLocalPrice(wilaya.code, 'office', e.target.value)}
+                          className="w-28 bg-obsidian-700 border border-obsidian-600 text-white rounded-lg px-3 py-1.5 font-body text-sm focus:outline-none focus:ring-1 focus:ring-gold-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => updateLocalPrice(wilaya.code, 'is_active', !isActive)}
+                          className={`flex items-center gap-1.5 text-xs font-body font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                              : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                          }`}>
+                          {isActive
+                            ? <><ToggleRight className="w-3.5 h-3.5" /> Actif</>
+                            : <><ToggleLeft className="w-3.5 h-3.5" /> Inactif</>
+                          }
+                        </button>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => saveWilayaPrice(wilaya.code)}
+                          disabled={savingDelivery === wilaya.code.toString()}
+                          className={`flex items-center gap-1.5 text-xs font-body font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                            isDirty
+                              ? 'bg-gold-500/20 text-gold-400 hover:bg-gold-500/30'
+                              : 'bg-obsidian-700 text-obsidian-400 hover:bg-obsidian-600'
+                          } disabled:opacity-50`}>
+                          {savingDelivery === wilaya.code.toString()
+                            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                            : <><Save className="w-3.5 h-3.5" /> Sauvegarder</>
+                          }
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function NotFound() {
-  return (
-    <div className="min-h-screen bg-[#fafaf8] flex items-center justify-center">
-      <div className="text-center">
-        <Clock className="w-20 h-20 text-obsidian-200 mx-auto mb-4" />
-        <h1 className="font-display text-3xl text-obsidian-600 mb-2">Produit introuvable</h1>
-        <Link href="/shop" className="text-gold-500 hover:underline font-body">Retour à la boutique</Link>
       </div>
     </div>
   );
