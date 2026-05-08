@@ -89,22 +89,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 🔐 Default Admin Accounts
 
-| Email | Password | Role |
-|-------|----------|------|
-| admin1@primewatches.dz | Admin@1234 | superadmin |
-| admin2@primewatches.dz | Admin@5678 | admin |
-
-> ⚠️ **Change these passwords in production!** Use bcrypt to hash new passwords and update them in the `admins` table.
-
-To generate a new bcrypt hash:
-```js
-const bcrypt = require('bcryptjs');
-console.log(bcrypt.hashSync('YourNewPassword', 12));
-```
-
----
 
 ## 💰 Business Logic
 
