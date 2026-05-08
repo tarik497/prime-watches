@@ -40,7 +40,10 @@ export default function CheckoutPage() {
         setProduct(pData.product);
         // Index delivery prices by wilaya_code
         const indexed: Record<number, DeliveryPrice> = {};
-        (dData.prices || []).forEach((p: DeliveryPrice) => { indexed[p.wilaya_code] = p; });
+// Seulement les wilayas actives
+        (dData.prices || [])
+          .filter((p: DeliveryPrice & { is_active: boolean }) => p.is_active !== false)
+          .forEach((p: DeliveryPrice) => { indexed[p.wilaya_code] = p; });
         setDeliveryPrices(indexed);
       } finally {
         setLoading(false);
