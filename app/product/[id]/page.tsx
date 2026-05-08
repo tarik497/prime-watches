@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield } from 'lucide-react';
+import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield, ChevronLeft,
+  ChevronRight } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
 
