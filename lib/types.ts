@@ -14,6 +14,7 @@ export interface Product {
   selling_price: number;
   stock: number;
   image_url?: string;
+  images?: string[];
   category?: string;
   is_active: boolean;
   created_at: string;
