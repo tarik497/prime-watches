@@ -89,13 +89,13 @@ export function formatDA(amount: number): string {
  */
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
-    pending:   'bg-yellow-400 text-yellow-900 border-yellow-500',
-    confirmed: 'bg-blue-400 text-blue-900 border-blue-500',
-    shipped:   'bg-purple-400 text-purple-900 border-purple-500',
-    delivered: 'bg-green-400 text-green-900 border-green-500',
-    cancelled: 'bg-red-400 text-red-900 border-red-500',
+    pending:   'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
+    confirmed: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
+    shipped:   'bg-purple-500/20 text-purple-300 border border-purple-500/40',
+    delivered: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+    cancelled: 'bg-red-500/20 text-red-300 border border-red-500/40',
   };
-  return map[status] ?? 'bg-gray-400 text-gray-900 border-gray-500';
+  return map[status] ?? 'bg-obsidian-700 text-obsidian-300 border border-obsidian-600';
 }
 
 /**
@@ -112,10 +112,6 @@ export function getStatusLabel(status: string): string {
   return map[status] ?? status;
 }
 
-/**
- * Calculate the promotional price of a product.
- * Returns null if no active promo.
- */
 export function getPromoPrice(product: {
   selling_price: number;
   promo_active?: boolean;
@@ -124,18 +120,11 @@ export function getPromoPrice(product: {
 }): number | null {
   if (!product.promo_active || !product.promo_type || !product.promo_value) return null;
   if (product.promo_type === 'percentage') {
-    const discounted = product.selling_price * (1 - product.promo_value / 100);
-    return Math.max(0, parseFloat(discounted.toFixed(2)));
+    return Math.max(0, parseFloat((product.selling_price * (1 - product.promo_value / 100)).toFixed(2)));
   }
-  if (product.promo_type === 'fixed') {
-    return Math.max(0, parseFloat((product.selling_price - product.promo_value).toFixed(2)));
-  }
-  return null;
+  return Math.max(0, parseFloat((product.selling_price - product.promo_value).toFixed(2)));
 }
 
-/**
- * Get the effective selling price (promo price if active, else normal price).
- */
 export function getEffectivePrice(product: {
   selling_price: number;
   promo_active?: boolean;
