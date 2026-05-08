@@ -4,21 +4,29 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Clock, ShoppingBag, Star, Zap, ChevronRight, Package, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, Clock, ShoppingBag, Star, Zap, ChevronRight, Package, Minus, Plus, Palette } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { formatDA, getPromoPrice, getEffectivePrice } from '@/lib/calculations';
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [product, setProduct]       = useState<Product | null>(null);
+  const [loading, setLoading]       = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity]     = useState(1);
+  const [selectedColor, setSelectedColor] = useState<string>('');
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
       .then(r => r.json())
-      .then(d => { setProduct(d.product); setLoading(false); })
+      .then(d => {
+        setProduct(d.product);
+        // Pre-select first color if available
+        if (d.product?.color_options?.length) {
+          setSelectedColor(d.product.color_options[0]);
+        }
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, [id]);
 
@@ -34,11 +42,16 @@ export default function ProductPage() {
   );
 
   const images = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
-  const outOfStock = product.stock === 0;
-  const maxQty = Math.min(product.stock, 10);
-  const promoPrice = getPromoPrice(product);
+  const outOfStock  = product.stock === 0;
+  const maxQty      = Math.min(product.stock, 10);
+  const promoPrice  = getPromoPrice(product);
   const effectivePrice = getEffectivePrice(product);
-  const hasPromo = promoPrice !== null;
+  const hasPromo    = promoPrice !== null;
+  const hasColors   = (product.color_options?.length ?? 0) > 0;
+  const colorChosen = !hasColors || !!selectedColor;
+
+  // Build checkout URL
+  const checkoutUrl = `/checkout/${product.id}?qty=${quantity}${selectedColor ? `&color=${encodeURIComponent(selectedColor)}` : ''}`;
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
@@ -70,7 +83,6 @@ export default function ProductPage() {
                   <Clock className="w-24 h-24 text-obsidian-200" />
                 </div>
               )}
-              {/* Promo badge on image */}
               {hasPromo && (
                 <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-body font-bold px-3 py-1.5 rounded-full shadow-lg">
                   {product.promo_type === 'percentage' ? `-${product.promo_value}%` : `-${formatDA(product.promo_value!)}`}
@@ -116,36 +128,24 @@ export default function ProductPage() {
               <span className="text-sm text-obsidian-400 font-body ml-1">Qualité garantie</span>
             </div>
 
-            {/* Price block */}
+            {/* Price */}
             <div className="space-y-1">
-              {hasPromo ? (
-                <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className="font-display text-4xl text-red-500 font-semibold">
-                    {formatDA(effectivePrice * quantity)}
-                  </span>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className={`font-display text-4xl font-semibold ${hasPromo ? 'text-red-500' : 'text-gold-600'}`}>
+                  {formatDA(effectivePrice * quantity)}
+                </span>
+                {hasPromo && (
                   <span className="font-display text-xl text-obsidian-400 line-through">
                     {formatDA(product.selling_price * quantity)}
                   </span>
-                  {quantity > 1 && (
-                    <span className="text-sm text-obsidian-400 font-body">
-                      ({formatDA(effectivePrice)} × {quantity})
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-baseline gap-3">
-                  <span className="font-display text-4xl text-gold-600 font-semibold">
-                    {formatDA(effectivePrice * quantity)}
+                )}
+                {quantity > 1 && (
+                  <span className="text-sm text-obsidian-400 font-body">
+                    ({formatDA(effectivePrice)} × {quantity})
                   </span>
-                  {quantity > 1 && (
-                    <span className="text-sm text-obsidian-400 font-body">
-                      ({formatDA(effectivePrice)} × {quantity})
-                    </span>
-                  )}
-                </div>
-              )}
-              {/* Promo savings line */}
-              {hasPromo && quantity > 0 && (
+                )}
+              </div>
+              {hasPromo && (
                 <p className="text-sm text-red-500 font-body font-medium">
                   🎉 Vous économisez {formatDA((product.selling_price - effectivePrice) * quantity)}
                 </p>
@@ -170,6 +170,37 @@ export default function ProductPage() {
                 </div>
               ))}
             </div>
+
+            {/* ── Color Selector ── */}
+            {hasColors && !outOfStock && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Palette className="w-4 h-4 text-obsidian-600" />
+                  <label className="text-sm font-body font-medium text-obsidian-700">
+                    Couleur
+                    {selectedColor && <span className="ml-2 text-gold-600 font-semibold">{selectedColor}</span>}
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {product.color_options!.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => setSelectedColor(color)}
+                      className={`px-4 py-2 rounded-xl text-sm font-body font-medium border-2 transition-all ${
+                        selectedColor === color
+                          ? 'border-gold-500 bg-gold-50 text-obsidian-800 shadow-md'
+                          : 'border-obsidian-200 bg-white text-obsidian-600 hover:border-obsidian-400'
+                      }`}
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
+                {!selectedColor && (
+                  <p className="text-xs text-red-500 font-body mt-2">Veuillez choisir une couleur</p>
+                )}
+              </div>
+            )}
 
             {/* Quantity Selector */}
             {!outOfStock && (
@@ -203,9 +234,14 @@ export default function ProductPage() {
               </button>
             ) : (
               <Link
-                href={`/checkout/${product.id}?qty=${quantity}`}
-                className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl font-body font-semibold text-lg hover:shadow-xl transition-all ${
-                  hasPromo ? 'bg-red-500 hover:bg-red-600 text-white' : 'btn-gold'
+                href={colorChosen ? checkoutUrl : '#'}
+                onClick={e => { if (!colorChosen) { e.preventDefault(); } }}
+                className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl font-body font-semibold text-lg transition-all ${
+                  !colorChosen
+                    ? 'bg-obsidian-200 text-obsidian-400 cursor-not-allowed'
+                    : hasPromo
+                      ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-xl'
+                      : 'btn-gold hover:shadow-xl'
                 }`}
               >
                 <ShoppingBag className="w-5 h-5" />
