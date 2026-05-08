@@ -5,15 +5,16 @@ import Image from 'next/image';
 import {
   Plus, Search, Edit2, Trash2, X, Upload, Clock,
   Package, TrendingUp, Eye, EyeOff, Save, ChevronLeft,
-  ChevronRight, ImagePlus, Trash
+  ChevronRight, ImagePlus, Trash, Tag, Percent, DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Product } from '@/lib/types';
-import { formatDA } from '@/lib/calculations';
+import { formatDA, getPromoPrice, getEffectivePrice } from '@/lib/calculations';
 
 const EMPTY = {
   name: '', description: '', purchase_price: 0, selling_price: 0,
   stock: 0, images: [] as string[], category: 'watch', is_active: true,
+  promo_active: false, promo_type: 'percentage' as 'percentage' | 'fixed', promo_value: 0,
 };
 
 export default function AdminProductsPage() {
@@ -64,6 +65,9 @@ export default function AdminProductsPage() {
       images: p.images?.length ? p.images : (p.image_url ? [p.image_url] : []),
       category: p.category || 'watch',
       is_active: p.is_active,
+      promo_active: p.promo_active || false,
+      promo_type: p.promo_type || 'percentage',
+      promo_value: p.promo_value || 0,
     });
     setPreviewIndex(0);
     setModalOpen(true);
@@ -115,6 +119,8 @@ export default function AdminProductsPage() {
       const payload = {
         ...form,
         image_url: form.images[0] || '',  // première image comme principale
+        promo_type: form.promo_active ? form.promo_type : null,
+        promo_value: form.promo_active ? form.promo_value : null,
       };
       const method = editing ? 'PUT' : 'POST';
       const url    = editing ? `/api/products/${editing.id}` : '/api/products';
@@ -184,7 +190,7 @@ export default function AdminProductsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-obsidian-700">
-                {['Produit', 'Images', 'Prix achat', 'Prix vente', 'Marge', 'Stock', 'Statut', 'Actions'].map(h => (
+                {['Produit', 'Images', 'Prix achat', 'Prix vente', 'Marge', 'Stock', 'Promo', 'Statut', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-3.5 text-left text-xs font-body font-medium text-obsidian-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -199,7 +205,7 @@ export default function AdminProductsPage() {
                   </tr>
                 ))
               ) : products.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center">
+                <tr><td colSpan={9} className="px-4 py-12 text-center">
                   <Clock className="w-10 h-10 text-obsidian-600 mx-auto mb-3" />
                   <p className="text-obsidian-500 font-body">Aucun produit</p>
                 </td></tr>
@@ -238,6 +244,16 @@ export default function AdminProductsPage() {
                         <span className={`inline-flex items-center gap-1 text-sm font-body ${p.stock <= 0 ? 'text-red-400' : p.stock <= 5 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                           <Package className="w-3.5 h-3.5" /> {p.stock}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.promo_active && p.promo_value ? (
+                          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-body bg-red-500/10 text-red-400 border border-red-500/20">
+                            <Tag className="w-3 h-3" />
+                            {p.promo_type === 'percentage' ? `-${p.promo_value}%` : `-${p.promo_value} DA`}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-obsidian-600 font-body">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-body ${p.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-obsidian-700 text-obsidian-400'}`}>
@@ -452,6 +468,85 @@ export default function AdminProductsPage() {
                     placeholder="watch"
                     className="w-full bg-obsidian-700 border border-obsidian-600 text-white placeholder-obsidian-500 rounded-xl px-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500" />
                 </div>
+              </div>
+
+
+              {/* ── Promotion Section ── */}
+              <div className="border border-obsidian-600 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between p-4 bg-obsidian-700/50">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-red-400" />
+                    <div>
+                      <p className="text-sm font-body font-medium text-white">Promotion</p>
+                      <p className="text-xs text-obsidian-400 font-body">Prix réduit affiché dans la boutique</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setForm(p => ({ ...p, promo_active: !p.promo_active }))}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${form.promo_active ? 'bg-red-500' : 'bg-obsidian-600'}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.promo_active ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {form.promo_active && (
+                  <div className="p-4 space-y-3 border-t border-obsidian-600">
+                    {/* Promo type selector */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'percentage', icon: Percent, label: 'Pourcentage', sub: 'ex: 20%' },
+                        { value: 'fixed',      icon: DollarSign, label: 'Montant fixe', sub: 'ex: 500 DA' },
+                      ].map(opt => (
+                        <button key={opt.value} type="button"
+                          onClick={() => setForm(p => ({ ...p, promo_type: opt.value as 'percentage' | 'fixed' }))}
+                          className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all text-left ${
+                            form.promo_type === opt.value
+                              ? 'border-red-500 bg-red-500/10'
+                              : 'border-obsidian-600 bg-obsidian-700 hover:border-obsidian-500'
+                          }`}>
+                          <opt.icon className={`w-4 h-4 ${form.promo_type === opt.value ? 'text-red-400' : 'text-obsidian-400'}`} />
+                          <div>
+                            <p className={`text-xs font-body font-medium ${form.promo_type === opt.value ? 'text-red-400' : 'text-obsidian-300'}`}>{opt.label}</p>
+                            <p className="text-xs text-obsidian-500 font-body">{opt.sub}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Promo value input */}
+                    <div>
+                      <label className="block text-xs font-body font-medium text-obsidian-300 mb-1.5">
+                        {form.promo_type === 'percentage' ? 'Réduction (%)' : 'Réduction (DA)'}
+                      </label>
+                      <input
+                        type="number" min="0"
+                        max={form.promo_type === 'percentage' ? 100 : undefined}
+                        value={form.promo_value || ''}
+                        onChange={e => setForm(p => ({ ...p, promo_value: parseFloat(e.target.value) || 0 }))}
+                        placeholder={form.promo_type === 'percentage' ? 'ex: 20' : 'ex: 500'}
+                        className="w-full bg-obsidian-700 border border-obsidian-600 text-white placeholder-obsidian-500 rounded-xl px-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+
+                    {/* Promo preview */}
+                    {form.promo_value > 0 && form.selling_price > 0 && (() => {
+                      const promoPrice = form.promo_type === 'percentage'
+                        ? form.selling_price * (1 - form.promo_value / 100)
+                        : form.selling_price - form.promo_value;
+                      const finalPrice = Math.max(0, promoPrice);
+                      return (
+                        <div className="flex items-center gap-3 p-3 bg-red-500/5 rounded-xl border border-red-500/20">
+                          <Tag className="w-4 h-4 text-red-400 flex-shrink-0" />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-obsidian-400 font-body text-sm line-through">{formatDA(form.selling_price)}</span>
+                            <span className="text-red-400 font-body font-semibold text-base">{formatDA(finalPrice)}</span>
+                            <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-body">
+                              -{form.promo_type === 'percentage' ? `${form.promo_value}%` : formatDA(form.promo_value)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* Active toggle */}
