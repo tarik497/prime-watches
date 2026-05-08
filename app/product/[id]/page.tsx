@@ -40,7 +40,9 @@ export default function ProductPage() {
   if (loading) return <PageSkeleton />;
   if (notFound || !product) return <NotFound />;
 
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`Je veux commander: ${product.name} - ${formatDA(product.selling_price)}`)}`;
+  const message = `Je veux commander: ${product.name} - ${formatDA(product.selling_price)}`;
+
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
