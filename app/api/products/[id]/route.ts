@@ -16,7 +16,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { name, description, purchase_price, selling_price, stock, image_url, images, category, is_active } = body;
+  const {
+    name, description, purchase_price, selling_price, stock,
+    image_url, images, category, is_active,
+    promo_type, promo_value, promo_active,
+  } = body;
 
   const { data, error } = await supabaseAdmin
     .from('products')
@@ -25,6 +29,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       image_url: image_url || (images?.[0] || ''),
       images: images || [],
       category, is_active,
+      promo_type: promo_active ? promo_type : null,
+      promo_value: promo_active ? promo_value : null,
+      promo_active: promo_active || false,
       updated_at: new Date().toISOString(),
     })
     .eq('id', params.id)
