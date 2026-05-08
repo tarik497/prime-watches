@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, ChevronDown, Eye, X, Phone, MapPin, Package, TrendingUp, Clock } from 'lucide-react';
+import Image from 'next/image';
+import { Search, Filter, ChevronDown, Eye, X, Phone, MapPin, Package, TrendingUp, Clock, Trash2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Order, OrderStatus } from '@/lib/types';
 import { formatDA, getStatusColor, getStatusLabel } from '@/lib/calculations';
@@ -9,11 +10,11 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { fetchApi } from '@/lib/fetchApi';
 
-const STATUSES: { value: string; label: string }[] = [
-  { value: 'all', label: 'Toutes' },
-  { value: 'pending', label: 'En attente' },
+const STATUSES = [
+  { value: 'all',       label: 'Toutes' },
+  { value: 'pending',   label: 'En attente' },
   { value: 'confirmed', label: 'Confirmées' },
-  { value: 'shipped', label: 'Expédiées' },
+  { value: 'shipped',   label: 'Expédiées' },
   { value: 'delivered', label: 'Livrées' },
   { value: 'cancelled', label: 'Annulées' },
 ];
@@ -21,12 +22,14 @@ const STATUSES: { value: string; label: string }[] = [
 const STATUS_FLOW: OrderStatus[] = ['pending', 'confirmed', 'shipped', 'delivered'];
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [orders, setOrders]           = useState<Order[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selected, setSelected] = useState<Order | null>(null);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [selected, setSelected]       = useState<Order | null>(null);
+  const [updatingId, setUpdatingId]   = useState<string | null>(null);
+  const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,8 +54,7 @@ export default function AdminOrdersPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      toast.success(`Statut mis à jour: ${getStatusLabel(status)}`);
-      // Update locally
+      toast.success(`Statut: ${getStatusLabel(status)}`);
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
       if (selected?.id === id) setSelected(prev => prev ? { ...prev, status } : null);
     } catch {
@@ -62,8 +64,24 @@ export default function AdminOrdersPage() {
     }
   }
 
+  async function deleteOrder(order: Order) {
+    setDeletingId(order.id);
+    try {
+      const res = await fetchApi(`/api/orders/${order.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      toast.success('Commande supprimée');
+      setOrders(prev => prev.filter(o => o.id !== order.id));
+      if (selected?.id === order.id) setSelected(null);
+    } catch {
+      toast.error('Erreur suppression');
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
+    }
+  }
+
   const totalRevenue = orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.total_price, 0);
-  const totalProfit = orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.profit, 0);
+  const totalProfit  = orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.profit, 0);
 
   return (
     <div className="space-y-6">
@@ -73,7 +91,6 @@ export default function AdminOrdersPage() {
           <h1 className="font-display text-3xl text-white">Commandes</h1>
           <p className="text-obsidian-400 font-body text-sm mt-0.5">{orders.length} commandes affichées</p>
         </div>
-        {/* Quick stats */}
         <div className="flex gap-3">
           <div className="bg-obsidian-800 border border-obsidian-700 rounded-xl px-4 py-2 text-center">
             <p className="text-xs text-obsidian-400 font-body">Revenu filtré</p>
@@ -90,18 +107,13 @@ export default function AdminOrdersPage() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-obsidian-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+          <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Rechercher par client..."
-            className="w-full bg-obsidian-800 border border-obsidian-700 text-white placeholder-obsidian-500 rounded-xl pl-10 pr-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500"
-          />
+            className="w-full bg-obsidian-800 border border-obsidian-700 text-white placeholder-obsidian-500 rounded-xl pl-10 pr-4 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500" />
         </div>
         <div className="relative">
           <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-obsidian-400" />
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="appearance-none bg-obsidian-800 border border-obsidian-700 text-white rounded-xl pl-10 pr-10 py-2.5 font-body text-sm focus:outline-none focus:ring-2 focus:ring-gold-500">
             {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
@@ -138,11 +150,38 @@ export default function AdminOrdersPage() {
                 orders.map(order => (
                   <tr key={order.id} className="hover:bg-obsidian-700/30 transition-colors">
                     <td className="px-4 py-3 text-xs text-obsidian-500 font-mono">#{order.id.slice(0, 8)}</td>
+
                     <td className="px-4 py-3">
                       <p className="text-sm text-white font-body font-medium">{order.customer_name}</p>
                       <p className="text-xs text-obsidian-400">{order.customer_phone}</p>
                     </td>
-                    <td className="px-4 py-3 text-sm text-obsidian-300 font-body max-w-[120px] truncate">{order.product_name}</td>
+
+                    {/* Product with image */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-obsidian-700 flex-shrink-0">
+                          {order.product_image ? (
+                            <Image src={order.product_image} alt={order.product_name} fill className="object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Clock className="w-4 h-4 text-obsidian-500" />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm text-obsidian-300 font-body max-w-[100px] truncate">{order.product_name}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs text-obsidian-500">×{order.quantity}</span>
+                            {order.selected_color && (
+                              <span className="text-xs bg-obsidian-600 text-obsidian-200 px-1.5 py-0.5 rounded-full">
+                                {order.selected_color}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
                     <td className="px-4 py-3 text-sm text-obsidian-300 font-body whitespace-nowrap">{order.wilaya_name}</td>
                     <td className="px-4 py-3 text-sm text-gold-400 font-body font-medium whitespace-nowrap">{formatDA(order.total_price)}</td>
                     <td className="px-4 py-3 text-sm font-body font-medium whitespace-nowrap">
@@ -151,6 +190,7 @@ export default function AdminOrdersPage() {
                     <td className="px-4 py-3 text-xs text-obsidian-400 font-body whitespace-nowrap">
                       {format(new Date(order.created_at), 'dd/MM/yy HH:mm')}
                     </td>
+
                     <td className="px-4 py-3">
                       <StatusSelector
                         currentStatus={order.status as OrderStatus}
@@ -158,11 +198,18 @@ export default function AdminOrdersPage() {
                         onChange={s => updateStatus(order.id, s)}
                       />
                     </td>
+
                     <td className="px-4 py-3">
-                      <button onClick={() => setSelected(order)}
-                        className="p-1.5 rounded-lg text-obsidian-400 hover:text-gold-400 hover:bg-gold-500/10 transition-colors">
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setSelected(order)}
+                          className="p-1.5 rounded-lg text-obsidian-400 hover:text-gold-400 hover:bg-gold-500/10 transition-colors">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setConfirmDelete(order)}
+                          className="p-1.5 rounded-lg text-obsidian-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -172,6 +219,48 @@ export default function AdminOrdersPage() {
         </div>
       </div>
 
+      {/* ── Delete Confirmation Modal ── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          onClick={() => setConfirmDelete(null)}>
+          <div className="bg-obsidian-800 border border-obsidian-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <h3 className="font-display text-xl text-white">Supprimer la commande ?</h3>
+            </div>
+            <p className="text-obsidian-300 font-body text-sm mb-1">
+              Commande de <span className="text-white font-medium">{confirmDelete.customer_name}</span>
+            </p>
+            <p className="text-obsidian-400 font-body text-xs mb-6">
+              {confirmDelete.product_name} · {formatDA(confirmDelete.total_price)}
+            </p>
+            <p className="text-xs text-red-400/80 font-body mb-5 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+              ⚠️ Cette action est irréversible. La commande sera définitivement supprimée.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-obsidian-600 text-obsidian-300 font-body text-sm hover:bg-obsidian-700 transition-colors">
+                Annuler
+              </button>
+              <button
+                onClick={() => deleteOrder(confirmDelete)}
+                disabled={deletingId === confirmDelete.id}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-body font-medium text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {deletingId === confirmDelete.id ? (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Order Detail Drawer ── */}
       {selected && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setSelected(null)}>
@@ -179,10 +268,18 @@ export default function AdminOrdersPage() {
             onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-obsidian-800 border-b border-obsidian-700 px-6 py-4 flex items-center justify-between">
               <h2 className="font-display text-xl text-white">Détail commande</h2>
-              <button onClick={() => setSelected(null)} className="p-2 rounded-lg text-obsidian-400 hover:text-white hover:bg-obsidian-700">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setConfirmDelete(selected); setSelected(null); }}
+                  className="p-2 rounded-lg text-obsidian-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => setSelected(null)}
+                  className="p-2 rounded-lg text-obsidian-400 hover:text-white hover:bg-obsidian-700">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
+
             <div className="p-6 space-y-6">
               {/* ID + Date */}
               <div>
@@ -193,7 +290,14 @@ export default function AdminOrdersPage() {
                 </p>
               </div>
 
-              {/* Status update */}
+              {/* Status */}
+              <div>
+                <p className="text-xs text-obsidian-400 font-body mb-2 uppercase tracking-wider">Statut actuel</p>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-body font-medium ${getStatusColor(selected.status)}`}>
+                  {getStatusLabel(selected.status)}
+                </span>
+              </div>
+
               <div>
                 <p className="text-xs text-obsidian-400 font-body mb-2 uppercase tracking-wider">Changer le statut</p>
                 <div className="flex flex-wrap gap-2">
@@ -201,26 +305,41 @@ export default function AdminOrdersPage() {
                     <button key={s}
                       onClick={() => updateStatus(selected.id, s)}
                       disabled={selected.status === s || updatingId === selected.id}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium border transition-all disabled:opacity-50 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium transition-all disabled:opacity-50 ${
                         selected.status === s
-                          ? `${getStatusColor(s)} border-current`
-                          : 'border-obsidian-600 text-obsidian-400 hover:border-gold-500 hover:text-gold-400'
+                          ? getStatusColor(s)
+                          : 'border border-obsidian-600 text-obsidian-400 hover:border-gold-500 hover:text-gold-400'
                       }`}>
                       {getStatusLabel(s)}
                     </button>
                   ))}
-                  <button
-                    onClick={() => updateStatus(selected.id, 'cancelled')}
+                  <button onClick={() => updateStatus(selected.id, 'cancelled')}
                     disabled={selected.status === 'cancelled' || updatingId === selected.id}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium border transition-all disabled:opacity-50 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-body font-medium transition-all disabled:opacity-50 ${
                       selected.status === 'cancelled'
-                        ? 'bg-red-100 text-red-800 border-red-200'
-                        : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+                        ? getStatusColor('cancelled')
+                        : 'border border-red-500/30 text-red-400 hover:bg-red-500/10'
                     }`}>
                     Annuler
                   </button>
                 </div>
               </div>
+
+              {/* Product with image */}
+              <InfoSection title="Produit" icon={<Clock className="w-4 h-4 text-gold-400" />}>
+                {selected.product_image && (
+                  <div className="relative w-full h-40 rounded-xl overflow-hidden mb-3 bg-obsidian-700">
+                    <Image src={selected.product_image} alt={selected.product_name} fill className="object-cover" />
+                  </div>
+                )}
+                <InfoRow label="Nom" value={selected.product_name} />
+                <InfoRow label="Quantité" value={`×${selected.quantity}`} />
+                {selected.selected_color && (
+                  <InfoRow label="Couleur" value={selected.selected_color} />
+                )}
+                <InfoRow label="Prix vente" value={formatDA(selected.selling_price)} />
+                <InfoRow label="Prix achat" value={formatDA(selected.purchase_price)} />
+              </InfoSection>
 
               {/* Customer */}
               <InfoSection title="Client" icon={<Phone className="w-4 h-4 text-gold-400" />}>
@@ -234,14 +353,6 @@ export default function AdminOrdersPage() {
                 <InfoRow label="Wilaya" value={`${selected.wilaya_name} (${selected.wilaya_code})`} />
                 <InfoRow label="Type" value={selected.delivery_type === 'home' ? 'À domicile' : 'Bureau / Relais'} />
                 <InfoRow label="Coût livraison" value={formatDA(selected.delivery_cost)} />
-              </InfoSection>
-
-              {/* Product */}
-              <InfoSection title="Produit" icon={<Clock className="w-4 h-4 text-gold-400" />}>
-                <InfoRow label="Nom" value={selected.product_name} />
-                <InfoRow label="Quantité" value={selected.quantity.toString()} />
-                <InfoRow label="Prix vente" value={formatDA(selected.selling_price)} />
-                <InfoRow label="Prix achat" value={formatDA(selected.purchase_price)} />
               </InfoSection>
 
               {/* Financials */}
@@ -266,10 +377,10 @@ export default function AdminOrdersPage() {
   );
 }
 
+// ── Sub-components ──────────────────────────────────────────
+
 function StatusSelector({ currentStatus, loading, onChange }: {
-  currentStatus: OrderStatus;
-  loading: boolean;
-  onChange: (s: OrderStatus) => void;
+  currentStatus: OrderStatus; loading: boolean; onChange: (s: OrderStatus) => void;
 }) {
   return (
     <div className="relative">
@@ -280,11 +391,11 @@ function StatusSelector({ currentStatus, loading, onChange }: {
           <select
             value={currentStatus}
             onChange={e => onChange(e.target.value as OrderStatus)}
-            className={`appearance-none text-xs font-body font-medium px-2.5 py-1 pr-6 rounded-full border cursor-pointer focus:outline-none ${getStatusColor(currentStatus)} bg-transparent`}>
+            className={`appearance-none text-xs font-body font-medium px-3 py-1.5 pr-7 rounded-full cursor-pointer focus:outline-none ${getStatusColor(currentStatus)}`}>
             {STATUS_FLOW.map(s => <option key={s} value={s}>{getStatusLabel(s)}</option>)}
             <option value="cancelled">Annulée</option>
           </select>
-          <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" />
+          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-70" />
         </div>
       )}
     </div>
@@ -305,9 +416,9 @@ function InfoSection({ title, icon, children }: { title: string; icon: React.Rea
 
 function InfoRow({ label, value, bold, valueClass }: { label: string; value: string; bold?: boolean; valueClass?: string }) {
   return (
-    <div className="flex justify-between items-center text-sm font-body">
-      <span className="text-obsidian-400">{label}</span>
-      <span className={`${bold ? 'font-semibold' : 'font-medium'} ${valueClass || 'text-white'} text-right max-w-[60%] break-words`}>
+    <div className="flex justify-between items-start text-sm font-body gap-4">
+      <span className="text-obsidian-400 flex-shrink-0">{label}</span>
+      <span className={`${bold ? 'font-semibold' : 'font-medium'} ${valueClass || 'text-white'} text-right break-words`}>
         {value}
       </span>
     </div>
