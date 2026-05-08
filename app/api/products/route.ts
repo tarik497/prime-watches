@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -27,7 +27,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const { name, description, purchase_price, selling_price, stock, image_url, images, category, is_active } = body;
+  const {
+    name, description, purchase_price, selling_price, stock,
+    image_url, images, category, is_active,
+    promo_type, promo_value, promo_active,
+  } = body;
 
   if (!name || selling_price === undefined)
     return NextResponse.json({ error: 'Name and selling_price required' }, { status: 400 });
@@ -37,6 +41,9 @@ export async function POST(req: NextRequest) {
     image_url: image_url || (images?.[0] || ''),
     images: images || [],
     category, is_active,
+    promo_type: promo_active ? promo_type : null,
+    promo_value: promo_active ? promo_value : null,
+    promo_active: promo_active || false,
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
