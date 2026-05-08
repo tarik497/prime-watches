@@ -8,17 +8,16 @@ import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield } 
 import type { Product } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
 
-const [activeImg, setActiveImg] = useState(0);
-const allImages = product.images?.length
-  ? product.images
-  : (product.image_url ? [product.image_url] : []);
-
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
+  const allImages = product.images?.length
+    ? product.images
+    : (product.image_url ? [product.image_url] : []);
 
   useEffect(() => {
     async function load() {
