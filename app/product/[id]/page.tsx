@@ -8,6 +8,11 @@ import { ArrowLeft, Clock, ShoppingBag, MessageCircle, Package, Truck, Shield } 
 import type { Product } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
 
+const [activeImg, setActiveImg] = useState(0);
+const allImages = product.images?.length
+  ? product.images
+  : (product.image_url ? [product.image_url] : []);
+
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -53,17 +58,46 @@ export default function ProductPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* ── Image ── */}
-          <div className="relative">
-            <div className="relative h-96 lg:h-[520px] bg-gradient-to-br from-obsidian-50 to-obsidian-100 rounded-3xl overflow-hidden shadow-2xl">
-              {product.image_url ? (
-                <Image src={product.image_url} alt={product.name} fill className="object-cover" />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Clock className="w-32 h-32 text-obsidian-200" />
+          {/* Images */}
+        <div className="relative">
+          <div className="relative h-96 lg:h-[520px] bg-gradient-to-br from-obsidian-50 to-obsidian-100 rounded-3xl overflow-hidden shadow-2xl">
+            {allImages[activeImg] ? (
+              <Image src={allImages[activeImg]} alt={product.name} fill className="object-cover" />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Clock className="w-32 h-32 text-obsidian-200" />
+              </div>
+            )}
+            {/* Navigation arrows */}
+            {allImages.length > 1 && (
+              <>
+                <button onClick={() => setActiveImg(i => (i - 1 + allImages.length) % allImages.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-all">
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button onClick={() => setActiveImg(i => (i + 1) % allImages.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-all">
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs px-2.5 py-1 rounded-full">
+                  {activeImg + 1} / {allImages.length}
                 </div>
-              )}
+              </>
+            )}
+          </div>
+
+          {/* Thumbnails */}
+          {allImages.length > 1 && (
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {allImages.map((img, i) => (
+                <button key={i} onClick={() => setActiveImg(i)}
+                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${activeImg === i ? 'border-gold-500' : 'border-obsidian-200'}`}>
+                  <Image src={img} alt={`vue ${i+1}`} width={64} height={64} className="object-cover w-full h-full" />
+                </button>
+              ))}
             </div>
+          )}
+        </div>
             {/* Stock ribbon */}
             {product.stock > 0 && product.stock <= 5 && (
               <div className="absolute top-4 right-4 bg-red-500 text-white text-sm font-body font-medium px-3 py-1.5 rounded-full shadow-lg">
