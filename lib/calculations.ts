@@ -111,3 +111,36 @@ export function getStatusLabel(status: string): string {
   };
   return map[status] ?? status;
 }
+
+/**
+ * Calculate the promotional price of a product.
+ * Returns null if no active promo.
+ */
+export function getPromoPrice(product: {
+  selling_price: number;
+  promo_active?: boolean;
+  promo_type?: 'percentage' | 'fixed' | null;
+  promo_value?: number | null;
+}): number | null {
+  if (!product.promo_active || !product.promo_type || !product.promo_value) return null;
+  if (product.promo_type === 'percentage') {
+    const discounted = product.selling_price * (1 - product.promo_value / 100);
+    return Math.max(0, parseFloat(discounted.toFixed(2)));
+  }
+  if (product.promo_type === 'fixed') {
+    return Math.max(0, parseFloat((product.selling_price - product.promo_value).toFixed(2)));
+  }
+  return null;
+}
+
+/**
+ * Get the effective selling price (promo price if active, else normal price).
+ */
+export function getEffectivePrice(product: {
+  selling_price: number;
+  promo_active?: boolean;
+  promo_type?: 'percentage' | 'fixed' | null;
+  promo_value?: number | null;
+}): number {
+  return getPromoPrice(product) ?? product.selling_price;
+}
