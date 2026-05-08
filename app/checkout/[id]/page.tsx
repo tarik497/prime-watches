@@ -46,7 +46,7 @@ export default function CheckoutPage() {
         setProduct(pData.product);
         const indexed: Record<number, DeliveryPrice> = {};
         (dData.prices || [])
-          .filter((p: DeliveryPrice & { is_active: boolean }) => p.is_active !== false)
+          .filter((p: DeliveryPrice) => p.is_active !== false)
           .forEach((p: DeliveryPrice) => { indexed[p.wilaya_code] = p; });
         setDeliveryPrices(indexed);
       } finally {
