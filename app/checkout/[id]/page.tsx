@@ -8,7 +8,6 @@ import { ArrowLeft, Clock, MapPin, User, Home, Building2, Package, ChevronDown, 
 import toast from 'react-hot-toast';
 import type { Product, DeliveryPrice, DeliveryType } from '@/lib/types';
 import { formatDA, calculateOrderTotal } from '@/lib/calculations';
-import { WILAYAS } from '@/lib/wilayas';
 
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>();
@@ -179,9 +178,11 @@ export default function CheckoutPage() {
                       required
                       className="w-full appearance-none bg-white border border-obsidian-200 rounded-xl px-4 py-3 pr-10 font-body text-obsidian-700 focus:outline-none focus:ring-2 focus:ring-gold-400 focus:border-transparent">
                       <option value="">-- Choisissez votre wilaya --</option>
-                      {WILAYAS.map(w => (
-                        <option key={w.code} value={w.code}>
-                          {w.code} - {w.name}
+                      {Object.values(deliveryPrices)
+                        .sort((a, b) => a.wilaya_code - b.wilaya_code)
+                        .map(w => (
+                        <option key={w.wilaya_code} value={w.wilaya_code}>
+                          {w.wilaya_code} - {w.wilaya_name}
                         </option>
                       ))}
                     </select>
