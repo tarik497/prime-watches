@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       customer_name, customer_phone, customer_address,
-      wilaya_code, delivery_type, product_id, quantity = 1, notes,
+      wilaya_code, delivery_type, product_id, quantity = 1, notes, selected_color,
     } = body;
 
     // Validate required fields
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         product_id, product_name: product.name, product_image: product.image_url,
         quantity, selling_price: product.selling_price, purchase_price: product.purchase_price,
         delivery_cost: deliveryCost, packaging_cost: packagingCost,
-        total_price: totalPrice, profit, notes, status: 'pending',
+        total_price: totalPrice, profit, notes, selected_color: selected_color || null, status: 'pending',
       })
       .select().single();
 
