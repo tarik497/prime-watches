@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Clock, MapPin, Phone, User, Home, Building2, Package, ChevronDown } from 'lucide-react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Clock, MapPin, User, Home, Building2, Package, ChevronDown, Minus, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Product, DeliveryPrice, DeliveryType } from '@/lib/types';
 import { formatDA, calculateOrderTotal } from '@/lib/calculations';
@@ -13,11 +13,18 @@ import { WILAYAS } from '@/lib/wilayas';
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [deliveryPrices, setDeliveryPrices] = useState<Record<number, DeliveryPrice>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Read quantity from URL param, default to 1
+  const [quantity, setQuantity] = useState(() => {
+    const q = parseInt(searchParams.get('qty') || '1', 10);
+    return isNaN(q) || q < 1 ? 1 : q;
+  });
 
   const [form, setForm] = useState({
     customer_name: '',
@@ -28,7 +35,6 @@ export default function CheckoutPage() {
     notes: '',
   });
 
-  // Load product + delivery prices
   useEffect(() => {
     async function load() {
       try {
@@ -38,9 +44,7 @@ export default function CheckoutPage() {
         ]);
         const [pData, dData] = await Promise.all([pRes.json(), dRes.json()]);
         setProduct(pData.product);
-        // Index delivery prices by wilaya_code
         const indexed: Record<number, DeliveryPrice> = {};
-// Seulement les wilayas actives
         (dData.prices || [])
           .filter((p: DeliveryPrice & { is_active: boolean }) => p.is_active !== false)
           .forEach((p: DeliveryPrice) => { indexed[p.wilaya_code] = p; });
@@ -52,12 +56,20 @@ export default function CheckoutPage() {
     load();
   }, [id]);
 
-  // Derived: selected wilaya delivery price
+  // Clamp quantity to stock once product is loaded
+  useEffect(() => {
+    if (product) {
+      setQuantity(q => Math.min(q, product.stock));
+    }
+  }, [product]);
+
   const selectedWilaya = form.wilaya_code ? deliveryPrices[Number(form.wilaya_code)] : null;
   const deliveryCost = selectedWilaya
     ? (form.delivery_type === 'home' ? selectedWilaya.home_price : selectedWilaya.office_price)
     : 0;
-  const total = product ? calculateOrderTotal(product.selling_price, deliveryCost, 1) : 0;
+  const total = product ? calculateOrderTotal(product.selling_price, deliveryCost, quantity) : 0;
+
+  const maxQty = product ? Math.min(product.stock, 10) : 10;
 
   function update(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -80,6 +92,7 @@ export default function CheckoutPage() {
           ...form,
           wilaya_code: Number(form.wilaya_code),
           product_id: product.id,
+          quantity,
         }),
       });
       const data = await res.json();
@@ -121,6 +134,7 @@ export default function CheckoutPage() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
             {/* ── Form ── */}
             <div className="lg:col-span-3 space-y-6">
               {/* Customer Info */}
@@ -182,7 +196,7 @@ export default function CheckoutPage() {
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { value: 'home', icon: Home, label: 'À domicile', sub: selectedWilaya ? formatDA(selectedWilaya.home_price) : '—' },
+                      { value: 'home',   icon: Home,      label: 'À domicile',          sub: selectedWilaya ? formatDA(selectedWilaya.home_price)   : '—' },
                       { value: 'office', icon: Building2, label: 'Bureau / Point relais', sub: selectedWilaya ? formatDA(selectedWilaya.office_price) : '—' },
                     ].map(opt => (
                       <button
@@ -231,18 +245,53 @@ export default function CheckoutPage() {
                     </div>
                   )}
                 </div>
+
                 <div className="p-5 space-y-4">
                   <div>
                     <p className="text-xs text-gold-500 font-body uppercase tracking-wider mb-1">Votre commande</p>
                     <h3 className="font-display text-xl text-obsidian-800">{product.name}</h3>
                   </div>
 
+                  {/* Quantity selector inside summary */}
+                  <div>
+                    <label className="block text-xs font-body font-medium text-obsidian-500 mb-2 uppercase tracking-wider">
+                      Quantité
+                    </label>
+                    <div className="flex items-center gap-0 w-fit border border-obsidian-200 rounded-xl overflow-hidden bg-obsidian-50">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                        disabled={quantity <= 1}
+                        className="w-10 h-10 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <div className="w-12 h-10 flex items-center justify-center font-display text-lg text-obsidian-900 border-x border-obsidian-200 select-none">
+                        {quantity}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(q => Math.min(maxQty, q + 1))}
+                        disabled={quantity >= maxQty}
+                        className="w-10 h-10 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Price breakdown */}
                   <div className="space-y-2 border-t border-obsidian-100 pt-4">
                     <div className="flex justify-between text-sm font-body text-obsidian-600">
-                      <span>Prix produit</span>
+                      <span>Prix unitaire</span>
                       <span>{formatDA(product.selling_price)}</span>
                     </div>
+                    {quantity > 1 && (
+                      <div className="flex justify-between text-sm font-body text-obsidian-600">
+                        <span>Sous-total ({quantity} articles)</span>
+                        <span>{formatDA(product.selling_price * quantity)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm font-body text-obsidian-600">
                       <span>Livraison ({form.delivery_type === 'home' ? 'Domicile' : 'Bureau'})</span>
                       <span className={deliveryCost > 0 ? 'text-obsidian-700' : 'text-obsidian-400'}>
@@ -266,7 +315,7 @@ export default function CheckoutPage() {
                     type="submit"
                     disabled={submitting || !form.wilaya_code}
                     className="w-full btn-gold py-4 rounded-xl font-body font-semibold text-base disabled:opacity-60 disabled:cursor-not-allowed transition-all hover:shadow-lg">
-                    {submitting ? 'Envoi en cours...' : 'Confirmer la commande'}
+                    {submitting ? 'Envoi en cours...' : `Confirmer la commande${quantity > 1 ? ` (${quantity} articles)` : ''}`}
                   </button>
 
                   <p className="text-xs text-center text-obsidian-400 font-body">
