@@ -1,24 +1,32 @@
 export const dynamic = 'force-dynamic';
-// app/api/products/[id]/route.ts — Get, Update, Delete single product
-
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getCurrentAdmin } from '@/lib/auth';
+import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { data, error } = await supabaseAdmin.from('products').select('*').eq('id', params.id).single();
+export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const { data, error } = await supabaseAdmin
+    .from('products').select('*').eq('id', params.id).single();
   if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ product: data });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = await getCurrentAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token || !verifyToken(token))
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
+  const { name, description, purchase_price, selling_price, stock, image_url, images, category, is_active } = body;
+
   const { data, error } = await supabaseAdmin
     .from('products')
-    .update(body)
+    .update({
+      name, description, purchase_price, selling_price, stock,
+      image_url: image_url || (images?.[0] || ''),
+      images: images || [],
+      category, is_active,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', params.id)
     .select()
     .single();
@@ -27,9 +35,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json({ product: data });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = await getCurrentAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token || !verifyToken(token))
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { error } = await supabaseAdmin.from('products').delete().eq('id', params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
