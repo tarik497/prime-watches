@@ -89,13 +89,13 @@ export function formatDA(amount: number): string {
  */
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
-    pending:   'bg-yellow-100 text-yellow-800 border-yellow-200',
-    confirmed: 'bg-blue-100 text-blue-800 border-blue-200',
-    shipped:   'bg-purple-100 text-purple-800 border-purple-200',
-    delivered: 'bg-green-100 text-green-800 border-green-200',
-    cancelled: 'bg-red-100 text-red-800 border-red-200',
+    pending:   'bg-yellow-400 text-yellow-900 border-yellow-500',
+    confirmed: 'bg-blue-400 text-blue-900 border-blue-500',
+    shipped:   'bg-purple-400 text-purple-900 border-purple-500',
+    delivered: 'bg-green-400 text-green-900 border-green-500',
+    cancelled: 'bg-red-400 text-red-900 border-red-500',
   };
-  return map[status] ?? 'bg-gray-100 text-gray-800';
+  return map[status] ?? 'bg-gray-400 text-gray-900 border-gray-500';
 }
 
 /**
