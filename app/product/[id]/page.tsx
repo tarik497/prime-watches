@@ -14,10 +14,12 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
   const [activeImg, setActiveImg] = useState(0);
-  const allImages = product.images?.length
+
+  const allImages = product?.images?.length
     ? product.images
-    : (product.image_url ? [product.image_url] : []);
+    : (product?.image_url ? [product.image_url] : []);
 
   useEffect(() => {
     async function load() {
