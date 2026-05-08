@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Clock, ShoppingBag, Star, Zap, ChevronRight, Package, Minus, Plus } from 'lucide-react';
 import type { Product } from '@/lib/types';
-import { formatDA } from '@/lib/calculations';
+import { formatDA, getPromoPrice, getEffectivePrice } from '@/lib/calculations';
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,15 +18,11 @@ export default function ProductPage() {
   useEffect(() => {
     fetch(`/api/products/${id}`)
       .then(r => r.json())
-      .then(d => {
-        setProduct(d.product);
-        setLoading(false);
-      })
+      .then(d => { setProduct(d.product); setLoading(false); })
       .catch(() => setLoading(false));
   }, [id]);
 
   if (loading) return <LoadingSkeleton />;
-
   if (!product) return (
     <div className="min-h-screen flex items-center justify-center bg-[#fafaf8]">
       <div className="text-center">
@@ -40,13 +36,12 @@ export default function ProductPage() {
   const images = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
   const outOfStock = product.stock === 0;
   const maxQty = Math.min(product.stock, 10);
-
-  function decrement() { setQuantity(q => Math.max(1, q - 1)); }
-  function increment() { setQuantity(q => Math.min(maxQty, q + 1)); }
+  const promoPrice = getPromoPrice(product);
+  const effectivePrice = getEffectivePrice(product);
+  const hasPromo = promoPrice !== null;
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
-      {/* Header */}
       <header className="sticky top-0 z-50 bg-obsidian-900 text-white shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -65,7 +60,7 @@ export default function ProductPage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
 
-          {/* ── Images ── */}
+          {/* Images */}
           <div className="space-y-4">
             <div className="relative aspect-square bg-gradient-to-br from-obsidian-50 to-obsidian-100 rounded-2xl overflow-hidden shadow-lg">
               {images[selectedImage] ? (
@@ -75,14 +70,20 @@ export default function ProductPage() {
                   <Clock className="w-24 h-24 text-obsidian-200" />
                 </div>
               )}
+              {/* Promo badge on image */}
+              {hasPromo && (
+                <div className="absolute top-4 left-4 bg-red-500 text-white text-sm font-body font-bold px-3 py-1.5 rounded-full shadow-lg">
+                  {product.promo_type === 'percentage' ? `-${product.promo_value}%` : `-${formatDA(product.promo_value!)}`}
+                </div>
+              )}
               {outOfStock && (
                 <div className="absolute inset-0 bg-obsidian-900/60 flex items-center justify-center">
                   <span className="text-white font-body text-lg bg-obsidian-700 px-6 py-3 rounded-full">Rupture de stock</span>
                 </div>
               )}
-              {product.stock <= 3 && product.stock > 0 && (
-                <span className="absolute top-4 left-4 bg-red-500 text-white text-sm font-body font-medium px-3 py-1.5 rounded-full">
-                  Plus que {product.stock} en stock!
+              {!outOfStock && product.stock <= 3 && (
+                <span className="absolute top-4 right-4 bg-orange-500 text-white text-xs font-body font-medium px-3 py-1.5 rounded-full">
+                  Plus que {product.stock}!
                 </span>
               )}
             </div>
@@ -100,7 +101,7 @@ export default function ProductPage() {
             )}
           </div>
 
-          {/* ── Product Info ── */}
+          {/* Info */}
           <div className="flex flex-col justify-start space-y-6">
             {product.category && (
               <p className="text-gold-500 font-body text-sm uppercase tracking-[0.2em]">{product.category}</p>
@@ -115,15 +116,39 @@ export default function ProductPage() {
               <span className="text-sm text-obsidian-400 font-body ml-1">Qualité garantie</span>
             </div>
 
-            {/* Price — updates live with quantity */}
-            <div className="flex items-baseline gap-3">
-              <span className="font-display text-4xl text-gold-600 font-semibold">
-                {formatDA(product.selling_price * quantity)}
-              </span>
-              {quantity > 1 && (
-                <span className="text-sm text-obsidian-400 font-body">
-                  ({formatDA(product.selling_price)} × {quantity})
-                </span>
+            {/* Price block */}
+            <div className="space-y-1">
+              {hasPromo ? (
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="font-display text-4xl text-red-500 font-semibold">
+                    {formatDA(effectivePrice * quantity)}
+                  </span>
+                  <span className="font-display text-xl text-obsidian-400 line-through">
+                    {formatDA(product.selling_price * quantity)}
+                  </span>
+                  {quantity > 1 && (
+                    <span className="text-sm text-obsidian-400 font-body">
+                      ({formatDA(effectivePrice)} × {quantity})
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-3">
+                  <span className="font-display text-4xl text-gold-600 font-semibold">
+                    {formatDA(effectivePrice * quantity)}
+                  </span>
+                  {quantity > 1 && (
+                    <span className="text-sm text-obsidian-400 font-body">
+                      ({formatDA(effectivePrice)} × {quantity})
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* Promo savings line */}
+              {hasPromo && quantity > 0 && (
+                <p className="text-sm text-red-500 font-body font-medium">
+                  🎉 Vous économisez {formatDA((product.selling_price - effectivePrice) * quantity)}
+                </p>
               )}
             </div>
 
@@ -146,28 +171,20 @@ export default function ProductPage() {
               ))}
             </div>
 
-            {/* ── Quantity Selector ── */}
+            {/* Quantity Selector */}
             {!outOfStock && (
               <div>
-                <label className="block text-sm font-body font-medium text-obsidian-700 mb-2">
-                  Quantité
-                </label>
+                <label className="block text-sm font-body font-medium text-obsidian-700 mb-2">Quantité</label>
                 <div className="flex items-center gap-0 w-fit border border-obsidian-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                  <button
-                    onClick={decrement}
-                    disabled={quantity <= 1}
-                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={quantity <= 1}
+                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                     <Minus className="w-4 h-4" />
                   </button>
                   <div className="w-14 h-12 flex items-center justify-center font-display text-xl text-obsidian-900 border-x border-obsidian-200 select-none">
                     {quantity}
                   </div>
-                  <button
-                    onClick={increment}
-                    disabled={quantity >= maxQty}
-                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={() => setQuantity(q => Math.min(maxQty, q + 1))} disabled={quantity >= maxQty}
+                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
@@ -179,7 +196,7 @@ export default function ProductPage() {
               </div>
             )}
 
-            {/* CTA Button */}
+            {/* CTA */}
             {outOfStock ? (
               <button disabled className="w-full py-4 rounded-xl bg-obsidian-100 text-obsidian-400 font-body font-semibold text-lg cursor-not-allowed">
                 Rupture de stock
@@ -187,7 +204,9 @@ export default function ProductPage() {
             ) : (
               <Link
                 href={`/checkout/${product.id}?qty=${quantity}`}
-                className="w-full flex items-center justify-center gap-3 btn-gold py-4 rounded-xl font-body font-semibold text-lg hover:shadow-xl transition-all"
+                className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl font-body font-semibold text-lg hover:shadow-xl transition-all ${
+                  hasPromo ? 'bg-red-500 hover:bg-red-600 text-white' : 'btn-gold'
+                }`}
               >
                 <ShoppingBag className="w-5 h-5" />
                 Commander {quantity > 1 ? `(${quantity} articles)` : 'maintenant'}
@@ -196,9 +215,7 @@ export default function ProductPage() {
             )}
 
             {!outOfStock && product.stock > 10 && (
-              <p className="text-center text-sm text-obsidian-400 font-body">
-                ✓ En stock — Expédition rapide
-              </p>
+              <p className="text-center text-sm text-obsidian-400 font-body">✓ En stock — Expédition rapide</p>
             )}
           </div>
         </div>
