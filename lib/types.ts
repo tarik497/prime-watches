@@ -31,6 +31,7 @@ export interface DeliveryPrice {
   wilaya_name: string;
   home_price: number;
   office_price: number;
+  is_active?: boolean;
   updated_at: string;
 }
 
