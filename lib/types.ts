@@ -17,6 +17,9 @@ export interface Product {
   images?: string[];
   category?: string;
   is_active: boolean;
+  promo_type?: 'percentage' | 'fixed' | null;
+  promo_value?: number | null;
+  promo_active?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -28,7 +31,6 @@ export interface DeliveryPrice {
   wilaya_name: string;
   home_price: number;
   office_price: number;
-  is_active: boolean;
   updated_at: string;
 }
 
