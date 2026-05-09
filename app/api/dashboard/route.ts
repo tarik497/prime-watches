@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
 import { format, subDays } from 'date-fns';
 
-// Supabase returns NUMERIC columns as strings — always parseFloat
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function n(v: any): number { return parseFloat(v) || 0; }
 
@@ -18,15 +17,11 @@ export async function GET(req: NextRequest) {
     supabaseAdmin.from('expenses').select('*'),
   ]);
 
-  if (ordersRes.error)   console.error('orders error:', ordersRes.error);
-  if (expensesRes.error) console.error('expenses error:', expensesRes.error);
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw   = (ordersRes.data  ?? []) as any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const exRaw = (expensesRes.data ?? []) as any[];
 
-  // Cast numeric fields so arithmetic works correctly
   const orders = raw.map(o => ({
     ...o,
     total_price:    n(o.total_price),
@@ -40,14 +35,12 @@ export async function GET(req: NextRequest) {
 
   const expenses = exRaw.map(e => ({ ...e, amount: n(e.amount) }));
 
-  const nonCancelled = orders.filter(o => o.status !== 'cancelled');
-
-  const totalRevenue  = nonCancelled.reduce((s, o) => s + o.total_price, 0);
-  const totalProfit   = nonCancelled.reduce((s, o) => s + o.profit, 0);
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const nonCancelled  = orders.filter(o => o.status !== 'cancelled');
+  const totalRevenue  = nonCancelled.reduce((s: number, o) => s + o.total_price, 0);
+  const totalProfit   = nonCancelled.reduce((s: number, o) => s + o.profit, 0);
+  const totalExpenses = expenses.reduce((s: number, e) => s + e.amount, 0);
   const realProfit    = totalProfit - totalExpenses;
 
-  // Revenue by day (last 30 days)
   const revenueByDay = [];
   for (let i = 29; i >= 0; i--) {
     const day     = subDays(new Date(), i);
@@ -57,12 +50,11 @@ export async function GET(req: NextRequest) {
     );
     revenueByDay.push({
       date:    dateStr,
-      revenue: dayOrders.reduce((s, o) => s + o.total_price, 0),
-      profit:  dayOrders.reduce((s, o) => s + o.profit, 0),
+      revenue: dayOrders.reduce((s: number, o) => s + o.total_price, 0),
+      profit:  dayOrders.reduce((s: number, o) => s + o.profit, 0),
     });
   }
 
-  // Orders by status
   const statusCounts: Record<string, number> = {};
   orders.forEach(o => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
   const ordersByStatus = Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
