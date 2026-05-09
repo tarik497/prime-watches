@@ -14,11 +14,6 @@ interface OrderRow {
   created_at: string;
   total_price: number;
   profit: number;
-  selling_price: number;
-  purchase_price: number;
-  delivery_cost: number;
-  packaging_cost: number;
-  quantity: number;
   [key: string]: unknown;
 }
 
@@ -32,8 +27,10 @@ export async function GET(req: NextRequest) {
     supabaseAdmin.from('expenses').select('*'),
   ]);
 
-  const orders: OrderRow[] = (ordersRes.data ?? []).map((o: Record<string, unknown>) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const orders: OrderRow[] = (ordersRes.data ?? []).map((o: any) => ({
     ...o,
+    id:             String(o.id ?? ''),
     status:         String(o.status ?? 'pending'),
     created_at:     String(o.created_at ?? ''),
     total_price:    toNum(o.total_price),
@@ -45,7 +42,8 @@ export async function GET(req: NextRequest) {
     quantity:       toNum(o.quantity),
   }));
 
-  const expenses = (expensesRes.data ?? []).map((e: Record<string, unknown>) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const expenses = (expensesRes.data ?? []).map((e: any) => ({
     ...e,
     amount: toNum(e.amount),
   }));
@@ -58,8 +56,8 @@ export async function GET(req: NextRequest) {
 
   const revenueByDay: { date: string; revenue: number; profit: number }[] = [];
   for (let i = 29; i >= 0; i--) {
-    const day     = subDays(new Date(), i);
-    const dateStr = format(day, 'dd/MM');
+    const day       = subDays(new Date(), i);
+    const dateStr   = format(day, 'dd/MM');
     const dayOrders = orders.filter(o => {
       const d = new Date(o.created_at);
       return d.toDateString() === day.toDateString() && o.status !== 'cancelled';
