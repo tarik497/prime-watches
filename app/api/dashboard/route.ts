@@ -2,29 +2,11 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { verifyToken, COOKIE_NAME } from '@/lib/auth';
-import { sumRevenue, sumOrderProfits, sumExpenses, calculateRealProfit } from '@/lib/calculations';
 import { format, subDays } from 'date-fns';
-import type { Order, Expense } from '@/lib/types';
 
-// Supabase returns NUMERIC columns as strings — cast everything to number
+// Supabase returns NUMERIC columns as strings — always parseFloat
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function castOrder(o: any): Order {
-  return {
-    ...o,
-    total_price:    parseFloat(o.total_price    ?? 0),
-    profit:         parseFloat(o.profit         ?? 0),
-    selling_price:  parseFloat(o.selling_price  ?? 0),
-    purchase_price: parseFloat(o.purchase_price ?? 0),
-    delivery_cost:  parseFloat(o.delivery_cost  ?? 0),
-    packaging_cost: parseFloat(o.packaging_cost ?? 0),
-    quantity:       parseInt(o.quantity         ?? 1),
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function castExpense(e: any): Expense {
-  return { ...e, amount: parseFloat(e.amount ?? 0) };
-}
+function n(v: any): number { return parseFloat(v) || 0; }
 
 export async function GET(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -36,23 +18,47 @@ export async function GET(req: NextRequest) {
     supabaseAdmin.from('expenses').select('*'),
   ]);
 
-  // Cast all numeric fields so arithmetic works correctly
-  const orders: Order[]     = (ordersRes.data  ?? []).map(castOrder);
-  const expenses: Expense[] = (expensesRes.data ?? []).map(castExpense);
+  if (ordersRes.error)   console.error('orders error:', ordersRes.error);
+  if (expensesRes.error) console.error('expenses error:', expensesRes.error);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw   = (ordersRes.data  ?? []) as any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const exRaw = (expensesRes.data ?? []) as any[];
+
+  // Cast numeric fields so arithmetic works correctly
+  const orders = raw.map(o => ({
+    ...o,
+    total_price:    n(o.total_price),
+    profit:         n(o.profit),
+    selling_price:  n(o.selling_price),
+    purchase_price: n(o.purchase_price),
+    delivery_cost:  n(o.delivery_cost),
+    packaging_cost: n(o.packaging_cost),
+    quantity:       n(o.quantity) || 1,
+  }));
+
+  const expenses = exRaw.map(e => ({ ...e, amount: n(e.amount) }));
+
+  const nonCancelled = orders.filter(o => o.status !== 'cancelled');
+
+  const totalRevenue  = nonCancelled.reduce((s, o) => s + o.total_price, 0);
+  const totalProfit   = nonCancelled.reduce((s, o) => s + o.profit, 0);
+  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const realProfit    = totalProfit - totalExpenses;
 
   // Revenue by day (last 30 days)
-  const revenueByDay: { date: string; revenue: number; profit: number }[] = [];
+  const revenueByDay = [];
   for (let i = 29; i >= 0; i--) {
     const day     = subDays(new Date(), i);
     const dateStr = format(day, 'dd/MM');
-    const dayOrders = orders.filter(o => {
-      const d = new Date(o.created_at);
-      return d.toDateString() === day.toDateString() && o.status !== 'cancelled';
-    });
+    const dayOrders = nonCancelled.filter(o =>
+      new Date(o.created_at).toDateString() === day.toDateString()
+    );
     revenueByDay.push({
       date:    dateStr,
-      revenue: parseFloat(dayOrders.reduce((s, o) => s + o.total_price, 0).toFixed(2)),
-      profit:  parseFloat(dayOrders.reduce((s, o) => s + o.profit, 0).toFixed(2)),
+      revenue: dayOrders.reduce((s, o) => s + o.total_price, 0),
+      profit:  dayOrders.reduce((s, o) => s + o.profit, 0),
     });
   }
 
@@ -62,10 +68,10 @@ export async function GET(req: NextRequest) {
   const ordersByStatus = Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
 
   return NextResponse.json({
-    totalRevenue:    sumRevenue(orders),
-    totalProfit:     sumOrderProfits(orders),
-    totalExpenses:   sumExpenses(expenses),
-    realProfit:      calculateRealProfit(orders, expenses),
+    totalRevenue:    parseFloat(totalRevenue.toFixed(2)),
+    totalProfit:     parseFloat(totalProfit.toFixed(2)),
+    totalExpenses:   parseFloat(totalExpenses.toFixed(2)),
+    realProfit:      parseFloat(realProfit.toFixed(2)),
     totalOrders:     orders.length,
     pendingOrders:   orders.filter(o => o.status === 'pending').length,
     confirmedOrders: orders.filter(o => o.status === 'confirmed').length,
