@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       }
 
       // For multi-item cart: delivery cost only charged once (on first item)
-      const isFirst = createdOrders.length === 0;
+      const isFirst: boolean = createdOrders.length === 0;
       const itemDeliveryCost = items.length === 1 ? deliveryCost : (isFirst ? deliveryCost : 0);
 
       const effectivePrice = product.promo_active && product.promo_value
