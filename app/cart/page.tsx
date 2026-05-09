@@ -12,7 +12,6 @@ import toast from 'react-hot-toast';
 import { useCartContext } from '@/lib/CartContext';
 import type { DeliveryPrice, DeliveryType } from '@/lib/types';
 import { formatDA } from '@/lib/calculations';
-import { WILAYAS } from '@/lib/wilayas';
 
 export default function CartPage() {
   const router = useRouter();
@@ -43,11 +42,11 @@ export default function CartPage() {
       });
   }, []);
 
-  const selectedWilaya  = form.wilaya_code ? deliveryPrices[Number(form.wilaya_code)] : null;
-  const deliveryCost    = selectedWilaya
+  const selectedWilaya = form.wilaya_code ? deliveryPrices[Number(form.wilaya_code)] : null;
+  const deliveryCost   = selectedWilaya
     ? (form.delivery_type === 'home' ? selectedWilaya.home_price : selectedWilaya.office_price)
     : 0;
-  const orderTotal      = totalPrice + deliveryCost;
+  const orderTotal = totalPrice + deliveryCost;
 
   function update(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -63,33 +62,33 @@ export default function CartPage() {
 
     setSubmitting(true);
     try {
-      // Submit each cart item as a separate order
-      const orderIds: string[] = [];
-      for (const item of items) {
-        const res = await fetch('/api/orders', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customer_name:    form.customer_name,
-            customer_phone:   form.customer_phone,
-            customer_address: form.customer_address,
-            wilaya_code:      Number(form.wilaya_code),
-            delivery_type:    form.delivery_type,
-            notes:            form.notes || undefined,
-            product_id:       item.productId,
-            quantity:         item.quantity,
-            selected_color:   item.selectedColor || undefined,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur commande');
-        orderIds.push(data.order.id);
-      }
+      // Send ALL cart items in ONE request — the API groups them with a shared order_group_id
+      const res = await fetch('/api/orders', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // Customer info (top level)
+          customer_name:    form.customer_name,
+          customer_phone:   form.customer_phone,
+          customer_address: form.customer_address,
+          wilaya_code:      Number(form.wilaya_code),
+          delivery_type:    form.delivery_type,
+          notes:            form.notes || undefined,
+          // All cart items
+          items: items.map(item => ({
+            product_id:     item.productId,
+            quantity:       item.quantity,
+            selected_color: item.selectedColor || undefined,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur commande');
 
       clearCart();
       toast.success('Commande passée avec succès!');
-      // Redirect to success page with first order id
-      router.push(`/order-success/${orderIds[0]}`);
+      router.push(`/order-success/${data.order.id}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
@@ -100,7 +99,7 @@ export default function CartPage() {
   if (items.length === 0 && step === 'cart') {
     return (
       <div className="min-h-screen bg-[#fafaf8]">
-        <Header totalItems={0} />
+        <CartHeader totalItems={0} />
         <div className="max-w-2xl mx-auto px-4 py-24 text-center">
           <ShoppingCart className="w-20 h-20 text-obsidian-200 mx-auto mb-6" />
           <h2 className="font-display text-3xl text-obsidian-600 mb-3">Votre panier est vide</h2>
@@ -115,30 +114,33 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
-      <Header totalItems={totalItems} />
+      <CartHeader totalItems={totalItems} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Steps */}
+        {/* Steps indicator */}
         <div className="flex items-center gap-3 mb-8 font-body text-sm">
           <button onClick={() => setStep('cart')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${step === 'cart' ? 'bg-obsidian-800 text-white' : 'text-obsidian-400 hover:text-obsidian-700'}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+              step === 'cart' ? 'bg-obsidian-800 text-white' : 'text-obsidian-400 hover:text-obsidian-700'
+            }`}>
             <ShoppingCart className="w-4 h-4" /> Panier ({totalItems})
           </button>
           <span className="text-obsidian-300">→</span>
           <button onClick={() => items.length > 0 && setStep('checkout')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${step === 'checkout' ? 'bg-obsidian-800 text-white' : 'text-obsidian-400 hover:text-obsidian-700'}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
+              step === 'checkout' ? 'bg-obsidian-800 text-white' : 'text-obsidian-400 hover:text-obsidian-700'
+            }`}>
             <Package className="w-4 h-4" /> Commander
           </button>
         </div>
 
         {step === 'cart' ? (
+          /* ── STEP 1: Cart items ── */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Cart items */}
             <div className="lg:col-span-2 space-y-4">
               {items.map(item => (
                 <div key={`${item.productId}-${item.selectedColor}`}
                   className="bg-white rounded-2xl border border-obsidian-100 shadow-sm p-4 flex gap-4">
-                  {/* Image */}
                   <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-obsidian-50">
                     {item.image_url ? (
                       <Image src={item.image_url} alt={item.name} fill className="object-cover" />
@@ -148,7 +150,6 @@ export default function CartPage() {
                       </div>
                     )}
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <h3 className="font-display text-lg text-obsidian-800 truncate">{item.name}</h3>
                     {item.selectedColor && (
@@ -164,9 +165,7 @@ export default function CartPage() {
                         <span className="text-xs text-obsidian-400 line-through font-body">{formatDA(item.original_price)}</span>
                       )}
                     </div>
-
                     <div className="flex items-center justify-between mt-3">
-                      {/* Qty */}
                       <div className="flex items-center gap-0 border border-obsidian-200 rounded-lg overflow-hidden">
                         <button onClick={() => updateQuantity(item.productId, item.selectedColor, item.quantity - 1)}
                           className="w-8 h-8 flex items-center justify-center text-obsidian-500 hover:bg-obsidian-50 transition-colors">
@@ -180,7 +179,6 @@ export default function CartPage() {
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
-
                       <div className="flex items-center gap-3">
                         <span className="font-body font-semibold text-obsidian-800">
                           {formatDA(item.selling_price * item.quantity)}
@@ -201,20 +199,22 @@ export default function CartPage() {
               </button>
             </div>
 
-            {/* Summary */}
+            {/* Summary sidebar */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl border border-obsidian-100 shadow-sm p-5 sticky top-24">
                 <h3 className="font-display text-xl text-obsidian-800 mb-4">Récapitulatif</h3>
                 <div className="space-y-2 mb-4">
                   {items.map(item => (
-                    <div key={`${item.productId}-${item.selectedColor}`} className="flex justify-between text-sm font-body text-obsidian-600">
-                      <span className="truncate flex-1 mr-2">{item.name}{item.selectedColor ? ` (${item.selectedColor})` : ''} ×{item.quantity}</span>
+                    <div key={`${item.productId}-${item.selectedColor}`}
+                      className="flex justify-between text-sm font-body text-obsidian-600">
+                      <span className="truncate flex-1 mr-2">
+                        {item.name}{item.selectedColor ? ` · ${item.selectedColor}` : ''} ×{item.quantity}
+                      </span>
                       <span className="flex-shrink-0">{formatDA(item.selling_price * item.quantity)}</span>
                     </div>
                   ))}
                   <div className="border-t border-obsidian-100 pt-2 flex justify-between font-body font-semibold text-obsidian-800">
-                    <span>Sous-total</span>
-                    <span>{formatDA(totalPrice)}</span>
+                    <span>Sous-total</span><span>{formatDA(totalPrice)}</span>
                   </div>
                   <p className="text-xs text-obsidian-400 font-body">+ Livraison calculée à l&apos;étape suivante</p>
                 </div>
@@ -227,20 +227,21 @@ export default function CartPage() {
           </div>
 
         ) : (
-          /* ── CHECKOUT STEP ── */
+          /* ── STEP 2: Checkout form ── */
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
 
-              {/* Form */}
               <div className="lg:col-span-3 space-y-6">
-
                 {/* Customer info */}
                 <FormSection title="Vos informations" icon={<User className="w-5 h-5 text-gold-500" />}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <InputField label="Nom complet *" value={form.customer_name} onChange={v => update('customer_name', v)} placeholder="Votre nom et prénom" required />
-                    <InputField label="Téléphone *" type="tel" value={form.customer_phone} onChange={v => update('customer_phone', v)} placeholder="05XXXXXXXX" required />
+                    <InputField label="Nom complet *" value={form.customer_name}
+                      onChange={v => update('customer_name', v)} placeholder="Nom et prénom" required />
+                    <InputField label="Téléphone *" type="tel" value={form.customer_phone}
+                      onChange={v => update('customer_phone', v)} placeholder="05XXXXXXXX" required />
                   </div>
-                  <InputField label="Adresse *" value={form.customer_address} onChange={v => update('customer_address', v)} placeholder="Rue, quartier, commune..." required />
+                  <InputField label="Adresse *" value={form.customer_address}
+                    onChange={v => update('customer_address', v)} placeholder="Rue, quartier, commune..." required />
                 </FormSection>
 
                 {/* Delivery */}
@@ -266,10 +267,10 @@ export default function CartPage() {
                   <div>
                     <label className="block text-sm font-body font-medium text-obsidian-700 mb-2">Type de livraison *</label>
                     <div className="grid grid-cols-2 gap-3">
-                      {[
+                      {([
                         { value: 'home',   icon: Home,      label: 'À domicile',           sub: selectedWilaya ? formatDA(selectedWilaya.home_price)   : '—' },
                         { value: 'office', icon: Building2, label: 'Bureau / Point relais', sub: selectedWilaya ? formatDA(selectedWilaya.office_price) : '—' },
-                      ].map(opt => (
+                      ] as const).map(opt => (
                         <button key={opt.value} type="button" onClick={() => update('delivery_type', opt.value)}
                           className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all font-body ${
                             form.delivery_type === opt.value
@@ -278,7 +279,9 @@ export default function CartPage() {
                           }`}>
                           <opt.icon className={`w-6 h-6 mb-1 ${form.delivery_type === opt.value ? 'text-gold-500' : 'text-obsidian-400'}`} />
                           <span className="text-sm font-medium">{opt.label}</span>
-                          <span className={`text-xs mt-0.5 ${form.delivery_type === opt.value ? 'text-gold-600 font-semibold' : 'text-obsidian-400'}`}>{opt.sub}</span>
+                          <span className={`text-xs mt-0.5 ${form.delivery_type === opt.value ? 'text-gold-600 font-semibold' : 'text-obsidian-400'}`}>
+                            {opt.sub}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -300,7 +303,7 @@ export default function CartPage() {
 
                   <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                     {items.map(item => (
-                      <div key={`${item.productId}-${item.selectedColor}`} className="flex gap-3">
+                      <div key={`${item.productId}-${item.selectedColor}`} className="flex gap-3 items-start">
                         <div className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-obsidian-50">
                           {item.image_url ? (
                             <Image src={item.image_url} alt={item.name} fill className="object-cover" />
@@ -312,8 +315,12 @@ export default function CartPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-body font-medium text-obsidian-700 truncate">{item.name}</p>
-                          {item.selectedColor && <p className="text-xs text-obsidian-400 font-body">{item.selectedColor}</p>}
-                          <p className="text-xs text-obsidian-500 font-body">×{item.quantity} · {formatDA(item.selling_price * item.quantity)}</p>
+                          {item.selectedColor && (
+                            <p className="text-xs text-obsidian-400 font-body">Couleur : {item.selectedColor}</p>
+                          )}
+                          <p className="text-xs text-obsidian-500 font-body">
+                            ×{item.quantity} · {formatDA(item.selling_price * item.quantity)}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -321,7 +328,8 @@ export default function CartPage() {
 
                   <div className="space-y-2 border-t border-obsidian-100 pt-3">
                     <div className="flex justify-between text-sm font-body text-obsidian-600">
-                      <span>Sous-total articles</span><span>{formatDA(totalPrice)}</span>
+                      <span>Articles ({totalItems})</span>
+                      <span>{formatDA(totalPrice)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-body text-obsidian-600">
                       <span>Livraison</span>
@@ -341,8 +349,8 @@ export default function CartPage() {
                   <button type="submit" disabled={submitting || !form.wilaya_code}
                     className="w-full btn-gold py-4 rounded-xl font-body font-semibold text-base disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                     {submitting
-                      ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Envoi...</>
-                      : <><ShoppingBag className="w-5 h-5" /> Confirmer la commande</>
+                      ? <><span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />Envoi...</>
+                      : <><ShoppingBag className="w-5 h-5" />Confirmer la commande</>
                     }
                   </button>
                 </div>
@@ -355,7 +363,7 @@ export default function CartPage() {
   );
 }
 
-function Header({ totalItems }: { totalItems: number }) {
+function CartHeader({ totalItems }: { totalItems: number }) {
   return (
     <header className="sticky top-0 z-50 bg-obsidian-900 text-white shadow-2xl">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -393,7 +401,8 @@ function InputField({ label, value, onChange, placeholder, required, type = 'tex
   return (
     <div>
       <label className="block text-sm font-body font-medium text-obsidian-700 mb-1.5">{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required}
+      <input type={type} value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} required={required}
         className="w-full bg-white border border-obsidian-200 rounded-xl px-4 py-3 font-body text-obsidian-700 focus:outline-none focus:ring-2 focus:ring-gold-400 placeholder-obsidian-300" />
     </div>
   );
