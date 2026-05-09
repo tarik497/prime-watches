@@ -92,16 +92,16 @@ export async function POST(req: NextRequest) {
 
       // For multi-item cart: delivery cost only charged once (on first item)
       const isFirst: boolean = createdOrders.length === 0;
-      const itemDeliveryCost = items.length === 1 ? deliveryCost : (isFirst ? deliveryCost : 0);
+      const itemDeliveryCost: number = items.length === 1 ? deliveryCost : (isFirst ? deliveryCost : 0);
 
-      const effectivePrice = product.promo_active && product.promo_value
+      const effectivePrice: number = product.promo_active && product.promo_value
         ? (product.promo_type === 'percentage'
             ? product.selling_price * (1 - product.promo_value / 100)
             : product.selling_price - product.promo_value)
         : product.selling_price;
 
-      const totalPrice = calculateOrderTotal(effectivePrice, itemDeliveryCost, quantity);
-      const profit = calculateOrderProfit(
+      const totalPrice: number = calculateOrderTotal(effectivePrice, itemDeliveryCost, quantity);
+      const profit: number = calculateOrderProfit(
         effectivePrice, product.purchase_price, packagingCost, itemDeliveryCost, quantity
       );
 
