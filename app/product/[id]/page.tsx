@@ -4,27 +4,27 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Clock, ShoppingBag, Star, Zap, ChevronRight, Package, Minus, Plus, Palette } from 'lucide-react';
+import { ArrowLeft, Clock, ShoppingBag, Star, Zap, Package, Minus, Plus, Palette, ShoppingCart } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { formatDA, getPromoPrice, getEffectivePrice } from '@/lib/calculations';
+import { useCartContext } from '@/lib/CartContext';
+import toast from 'react-hot-toast';
 
 export default function ProductPage() {
-  const { id } = useParams<{ id: string }>();
-  const [product, setProduct]       = useState<Product | null>(null);
-  const [loading, setLoading]       = useState(true);
+  const { id }          = useParams<{ id: string }>();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity]     = useState(1);
   const [selectedColor, setSelectedColor] = useState<string>('');
+  const { addItem, totalItems }     = useCartContext();
 
   useEffect(() => {
     fetch(`/api/products/${id}`)
       .then(r => r.json())
       .then(d => {
         setProduct(d.product);
-        // Pre-select first color if available
-        if (d.product?.color_options?.length) {
-          setSelectedColor(d.product.color_options[0]);
-        }
+        if (d.product?.color_options?.length) setSelectedColor(d.product.color_options[0]);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -41,17 +41,32 @@ export default function ProductPage() {
     </div>
   );
 
-  const images = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
-  const outOfStock  = product.stock === 0;
-  const maxQty      = Math.min(product.stock, 10);
-  const promoPrice  = getPromoPrice(product);
+  const images        = product.images?.length ? product.images : (product.image_url ? [product.image_url] : []);
+  const outOfStock    = product.stock === 0;
+  const maxQty        = Math.min(product.stock, 10);
+  const promoPrice    = getPromoPrice(product);
   const effectivePrice = getEffectivePrice(product);
-  const hasPromo    = promoPrice !== null;
-  const hasColors   = (product.color_options?.length ?? 0) > 0;
-  const colorChosen = !hasColors || !!selectedColor;
+  const hasPromo      = promoPrice !== null;
+  const hasColors     = (product.color_options?.length ?? 0) > 0;
+  const canAdd        = !outOfStock && (!hasColors || !!selectedColor);
 
-  // Build checkout URL
-  const checkoutUrl = `/checkout/${product.id}?qty=${quantity}${selectedColor ? `&color=${encodeURIComponent(selectedColor)}` : ''}`;
+  function handleAddToCart() {
+    if (!canAdd) return;
+    addItem({
+      productId:      product!.id,
+      name:           product!.name,
+      image_url:      product!.image_url,
+      selling_price:  effectivePrice,
+      original_price: product!.selling_price,
+      purchase_price: product!.purchase_price,
+      quantity,
+      selectedColor:  selectedColor || undefined,
+      promo_type:     product!.promo_type,
+      promo_value:    product!.promo_value,
+      color_options:  product!.color_options,
+    });
+    toast.success(`${product!.name} ajouté au panier!`);
+  }
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
@@ -59,13 +74,20 @@ export default function ProductPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/shop" className="flex items-center gap-2 text-obsidian-300 hover:text-white transition-colors font-body text-sm">
-              <ArrowLeft className="w-4 h-4" /> Retour boutique
+              <ArrowLeft className="w-4 h-4" /> Retour
             </Link>
             <Link href="/shop" className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-gold-500" />
               <span className="font-display text-xl text-gold-400 tracking-wider">PRIME WATCHES</span>
             </Link>
-            <div className="w-32" />
+            <Link href="/cart" className="relative flex items-center gap-2 bg-gold-500/10 border border-gold-500/30 text-gold-400 px-3 py-1.5 rounded-xl text-sm font-body">
+              <ShoppingCart className="w-4 h-4" />
+              {totalItems > 0 && (
+                <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                  {totalItems > 9 ? '9+' : totalItems}
+                </span>
+              )}
+            </Link>
           </div>
         </div>
       </header>
@@ -93,11 +115,6 @@ export default function ProductPage() {
                   <span className="text-white font-body text-lg bg-obsidian-700 px-6 py-3 rounded-full">Rupture de stock</span>
                 </div>
               )}
-              {!outOfStock && product.stock <= 3 && (
-                <span className="absolute top-4 right-4 bg-orange-500 text-white text-xs font-body font-medium px-3 py-1.5 rounded-full">
-                  Plus que {product.stock}!
-                </span>
-              )}
             </div>
             {images.length > 1 && (
               <div className="flex gap-3 overflow-x-auto pb-1">
@@ -118,13 +135,9 @@ export default function ProductPage() {
             {product.category && (
               <p className="text-gold-500 font-body text-sm uppercase tracking-[0.2em]">{product.category}</p>
             )}
-
             <h1 className="font-display text-4xl text-obsidian-900 leading-tight">{product.name}</h1>
-
             <div className="flex items-center gap-2">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-4 h-4 text-gold-400 fill-gold-400" />
-              ))}
+              {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 text-gold-400 fill-gold-400" />)}
               <span className="text-sm text-obsidian-400 font-body ml-1">Qualité garantie</span>
             </div>
 
@@ -135,26 +148,14 @@ export default function ProductPage() {
                   {formatDA(effectivePrice * quantity)}
                 </span>
                 {hasPromo && (
-                  <span className="font-display text-xl text-obsidian-400 line-through">
-                    {formatDA(product.selling_price * quantity)}
-                  </span>
+                  <span className="font-display text-xl text-obsidian-400 line-through">{formatDA(product.selling_price * quantity)}</span>
                 )}
-                {quantity > 1 && (
-                  <span className="text-sm text-obsidian-400 font-body">
-                    ({formatDA(effectivePrice)} × {quantity})
-                  </span>
-                )}
+                {quantity > 1 && <span className="text-sm text-obsidian-400 font-body">({formatDA(effectivePrice)} × {quantity})</span>}
               </div>
-              {hasPromo && (
-                <p className="text-sm text-red-500 font-body font-medium">
-                  🎉 Vous économisez {formatDA((product.selling_price - effectivePrice) * quantity)}
-                </p>
-              )}
+              {hasPromo && <p className="text-sm text-red-500 font-body font-medium">🎉 Vous économisez {formatDA((product.selling_price - effectivePrice) * quantity)}</p>}
             </div>
 
-            {product.description && (
-              <p className="text-obsidian-600 font-body leading-relaxed text-base">{product.description}</p>
-            )}
+            {product.description && <p className="text-obsidian-600 font-body leading-relaxed">{product.description}</p>}
 
             {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3">
@@ -171,87 +172,76 @@ export default function ProductPage() {
               ))}
             </div>
 
-            {/* ── Color Selector ── */}
+            {/* Color Selector */}
             {hasColors && !outOfStock && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Palette className="w-4 h-4 text-obsidian-600" />
                   <label className="text-sm font-body font-medium text-obsidian-700">
-                    Couleur
-                    {selectedColor && <span className="ml-2 text-gold-600 font-semibold">{selectedColor}</span>}
+                    Couleur {selectedColor && <span className="ml-2 text-gold-600 font-semibold">{selectedColor}</span>}
                   </label>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {product.color_options!.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
+                    <button key={color} onClick={() => setSelectedColor(color)}
                       className={`px-4 py-2 rounded-xl text-sm font-body font-medium border-2 transition-all ${
                         selectedColor === color
                           ? 'border-gold-500 bg-gold-50 text-obsidian-800 shadow-md'
                           : 'border-obsidian-200 bg-white text-obsidian-600 hover:border-obsidian-400'
-                      }`}
-                    >
+                      }`}>
                       {color}
                     </button>
                   ))}
                 </div>
-                {!selectedColor && (
-                  <p className="text-xs text-red-500 font-body mt-2">Veuillez choisir une couleur</p>
-                )}
               </div>
             )}
 
-            {/* Quantity Selector */}
+            {/* Quantity */}
             {!outOfStock && (
               <div>
                 <label className="block text-sm font-body font-medium text-obsidian-700 mb-2">Quantité</label>
                 <div className="flex items-center gap-0 w-fit border border-obsidian-200 rounded-xl overflow-hidden bg-white shadow-sm">
                   <button onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={quantity <= 1}
-                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30">
                     <Minus className="w-4 h-4" />
                   </button>
                   <div className="w-14 h-12 flex items-center justify-center font-display text-xl text-obsidian-900 border-x border-obsidian-200 select-none">
                     {quantity}
                   </div>
                   <button onClick={() => setQuantity(q => Math.min(maxQty, q + 1))} disabled={quantity >= maxQty}
-                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                    className="w-12 h-12 flex items-center justify-center text-obsidian-600 hover:bg-obsidian-50 transition-colors disabled:opacity-30">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-                {product.stock <= 10 && (
-                  <p className="text-xs text-obsidian-400 font-body mt-1.5">
-                    {product.stock} unité{product.stock > 1 ? 's' : ''} disponible{product.stock > 1 ? 's' : ''}
-                  </p>
-                )}
               </div>
             )}
 
-            {/* CTA */}
+            {/* CTAs */}
             {outOfStock ? (
               <button disabled className="w-full py-4 rounded-xl bg-obsidian-100 text-obsidian-400 font-body font-semibold text-lg cursor-not-allowed">
                 Rupture de stock
               </button>
             ) : (
-              <Link
-                href={colorChosen ? checkoutUrl : '#'}
-                onClick={e => { if (!colorChosen) { e.preventDefault(); } }}
-                className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl font-body font-semibold text-lg transition-all ${
-                  !colorChosen
-                    ? 'bg-obsidian-200 text-obsidian-400 cursor-not-allowed'
-                    : hasPromo
-                      ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-xl'
-                      : 'btn-gold hover:shadow-xl'
-                }`}
-              >
-                <ShoppingBag className="w-5 h-5" />
-                Commander {quantity > 1 ? `(${quantity} articles)` : 'maintenant'}
-                <ChevronRight className="w-5 h-5" />
-              </Link>
-            )}
-
-            {!outOfStock && product.stock > 10 && (
-              <p className="text-center text-sm text-obsidian-400 font-body">✓ En stock — Expédition rapide</p>
+              <div className="flex flex-col gap-3">
+                {/* Add to cart */}
+                <button onClick={handleAddToCart} disabled={!canAdd}
+                  className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl font-body font-semibold text-lg transition-all ${
+                    !canAdd ? 'bg-obsidian-100 text-obsidian-400 cursor-not-allowed'
+                    : hasPromo ? 'bg-red-500 hover:bg-red-600 text-white hover:shadow-xl'
+                    : 'btn-gold hover:shadow-xl'
+                  }`}>
+                  <ShoppingCart className="w-5 h-5" />
+                  Ajouter au panier
+                </button>
+                {/* Go to cart if items */}
+                {totalItems > 0 && (
+                  <Link href="/cart"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-obsidian-200 text-obsidian-700 font-body font-medium text-base hover:border-gold-400 transition-all">
+                    <ShoppingBag className="w-4 h-4" />
+                    Voir le panier ({totalItems})
+                  </Link>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -271,12 +261,9 @@ function LoadingSkeleton() {
       <div className="max-w-6xl mx-auto px-4 py-10 grid grid-cols-1 lg:grid-cols-2 gap-12">
         <div className="aspect-square bg-obsidian-100 rounded-2xl" />
         <div className="space-y-4">
-          <div className="h-4 bg-obsidian-100 rounded w-1/4" />
-          <div className="h-10 bg-obsidian-100 rounded w-3/4" />
-          <div className="h-8 bg-obsidian-100 rounded w-1/3" />
-          <div className="h-24 bg-obsidian-100 rounded" />
-          <div className="h-12 bg-obsidian-100 rounded w-40" />
-          <div className="h-14 bg-obsidian-100 rounded" />
+          {[1/4, 3/4, 1/3, 1, 40/100, 56/100].map((w, i) => (
+            <div key={i} className="h-8 bg-obsidian-100 rounded" style={{ width: `${w * 100}%` }} />
+          ))}
         </div>
       </div>
     </div>
